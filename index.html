@@ -1,3 +1,39 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#04040a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="NEXUS" />
+  <title>NEXUS</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #04040a; }
+    #root { height: 100vh; }
+    #loading { position:fixed; inset:0; background:#04040a; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#a78bfa; font-family:sans-serif; }
+    #loading h1 { font-size:48px; letter-spacing:12px; margin-bottom:16px; }
+    #loading p { color:#334155; font-size:13px; }
+  </style>
+</head>
+<body>
+  <div id="loading">
+    <h1>NEXUS</h1>
+    <p>Cargando...</p>
+  </div>
+  <div id="root"></div>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone@7.23.10/babel.min.js"></script>
+  <script>
+    window.addEventListener('load', function() {
+      setTimeout(function() {
+        document.getElementById('loading').style.display = 'none';
+      }, 500);
+    });
+  </script>
+  <script type="text/babel">
 import { useState, useEffect, useRef, useCallback } from "react";
 
 
@@ -148,10 +184,7 @@ export default function NEXUS() {
   const persist = useCallback((key, val) => {
     // Save locally for instant UI
     try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
-    // Save to Firestore for cloud sync
-    try {
-      setDoc(doc(db, "nexus_users", USER_DOC), { [key]: JSON.stringify(val) }, { merge: true });
-    } catch(e) {}
+
   }, []);
 
   useEffect(() => {
@@ -174,20 +207,7 @@ export default function NEXUS() {
       if (!md || JSON.parse(md) !== todayStr()) setShowModeSelect(true);
     } catch { setShowModeSelect(true); }
 
-    // 2. Load from Firestore (cloud sync - overrides local if newer)
-    getDoc(doc(db, "nexus_users", USER_DOC)).then(snap => {
-      if (!snap.exists()) return;
-      const data = snap.data();
-      KEYS.forEach(([key, setter]) => {
-        try {
-          if (data[key]) {
-            const parsed = JSON.parse(data[key]);
-            setter(parsed);
-            localStorage.setItem(key, data[key]);
-          }
-        } catch {}
-      });
-    }).catch(() => {});
+
 
     if ("Notification" in window) setNotifPerm(Notification.permission);
   }, []);
@@ -1556,3 +1576,10 @@ ${buildContext()}`;
     </div>
   );
 }
+
+    const container = document.getElementById('root');
+    const root = ReactDOM.createRoot(container);
+    root.render(React.createElement(NEXUS));
+  </script>
+</body>
+</html>
