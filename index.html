@@ -12,28 +12,15 @@
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #04040a; }
     #root { height: 100vh; }
-    #loading { position:fixed; inset:0; background:#04040a; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#a78bfa; font-family:sans-serif; }
-    #loading h1 { font-size:48px; letter-spacing:12px; margin-bottom:16px; }
-    #loading p { color:#334155; font-size:13px; }
+
   </style>
 </head>
 <body>
-  <div id="loading">
-    <h1>NEXUS</h1>
-    <p>Cargando...</p>
-  </div>
   <div id="root"></div>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone@7.23.10/babel.min.js"></script>
-  <script>
-    window.addEventListener('load', function() {
-      setTimeout(function() {
-        document.getElementById('loading').style.display = 'none';
-      }, 500);
-    });
-  </script>
-  <script type="text/babel">
+<script type="text/babel">
 import { useState, useEffect, useRef, useCallback } from "react";
 
 
