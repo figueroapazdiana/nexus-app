@@ -7,1567 +7,1230 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="NEXUS" />
+  <link rel="manifest" href="manifest.json" />
   <title>NEXUS</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #04040a; }
-    #root { height: 100vh; }
-
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; overflow: hidden; }
+    body { background: #04040a; font-family: 'Outfit', sans-serif; color: #f1f5f9; }
+    #root { height: 100%; }
+    input, textarea, select, button { font-family: 'Outfit', sans-serif; outline: none; border: none; }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #1e1b4b; border-radius: 4px; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+    @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+    @keyframes ripple { 0% { transform: scale(0.8); opacity: 0.6; } 100% { transform: scale(2.4); opacity: 0; } }
   </style>
 </head>
 <body>
   <div id="root"></div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone@7.23.10/babel.min.js"></script>
-<script type="text/babel">
-import { useState, useEffect, useRef, useCallback } from "react";
 
+  <script type="text/babel">
+    const { useState, useEffect, useRef, useCallback, useMemo } = React;
 
-const injectFonts = () => {
-  if (document.getElementById("nx3-fonts")) return;
-  const l = document.createElement("link");
-  l.id = "nx3-fonts"; l.rel = "stylesheet";
-  l.href = "https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Outfit:wght@300;400;500;600;700&display=swap";
-  document.head.appendChild(l);
-};
+    /* ═══════════════════ CONSTANTS ═══════════════════ */
+    const C = {
+      bg: "#04040a", card: "#09090f", card2: "#0d0d15", border: "#141420",
+      teal: "#a78bfa", pink: "#f472b6", yellow: "#fb923c", purple: "#8b5cf6",
+      red: "#f43f5e", green: "#34d399", orange: "#f97316", blue: "#818cf8",
+      text: "#f1f5f9", muted: "#64748b", mutedDark: "#334155",
+      grad: "linear-gradient(135deg, #7c3aed, #ea580c)",
+    };
 
-// Dot-grid background CSS
-const injectGlobalStyles = () => {
-  if (document.getElementById("nx3-global")) return;
-  const s = document.createElement("style");
-  s.id = "nx3-global";
-  s.textContent = [
-    "body { background: #04040a !important; margin: 0; }",
-    "::-webkit-scrollbar { width: 3px; background: transparent; }",
-    "::-webkit-scrollbar-thumb { background: #1e1e30; border-radius: 2px; }"
-  ].join(" ");
-  document.head.appendChild(s);
-};
+    const MODES = {
+      ejecutivo: { name: "Ejecutivo", emoji: "🎯", color: "#a78bfa",
+        prompt: "Eres un COO de élite. Directo, eficiente, sin rodeos. Cada respuesta es concisa y accionable. Máxima eficiencia, cero relleno." },
+      coach: { name: "Coach", emoji: "💪", color: "#f472b6",
+        prompt: "Coach brutalmente honesto. Sin excusas. Si hay tareas vencidas, confrontas directamente. Regañas cuando es necesario. CAPS para énfasis." },
+      fun: { name: "Fun", emoji: "😂", color: "#fb923c",
+        prompt: "Divertido e irreverente. Humor inteligente sobre productividad. Bromas sobre procrastinación pero siempre llevando a la acción." },
+      hype: { name: "Hype", emoji: "🔥", color: "#f97316",
+        prompt: "El hype man definitivo. Cada logro es ÉPICO. Energía pura contagiosa. Celebras hasta los avances pequeños. CAPS frecuentes." },
+      zen: { name: "Zen", emoji: "🧘", color: "#818cf8",
+        prompt: "Calmo, sabio, estratégico. Perspectiva elevada. Ayudas a ver el panorama completo sin estrés. Claridad sobre caos." },
+      savage: { name: "Savage", emoji: "😤", color: "#f43f5e",
+        prompt: "Sin filtros absolutos. No toleras excusas bajo ningún concepto. Lenguaje directo al punto de ser incómodo. Cada tarea vencida es inaceptable. Obligas a actuar AHORA." },
+    };
 
-const C = {
-  bg: "#04040a", card: "#09090f", border: "#141420",
-  teal: "#a78bfa",    // violet accent
-  pink: "#f472b6",    // pink accent
-  yellow: "#fb923c",  // orange (SaleADS stat color)
-  purple: "#8b5cf6",  // purple
-  red: "#f43f5e",     // red
-  green: "#34d399",   // green
-  orange: "#f97316",  // orange gradient end
-  blue: "#818cf8",    // indigo
-  text: "#f1f5f9", muted: "#334155",
-  grad: "linear-gradient(135deg, #7c3aed, #ea580c)", // purple→orange CTA gradient
-};
+    const EVENT_TYPES = {
+      meeting:  { label: "Reunión",   emoji: "🤝", color: C.teal },
+      call:     { label: "Llamada",   emoji: "📞", color: C.green },
+      task:     { label: "Pendiente", emoji: "✅", color: C.yellow },
+      personal: { label: "Personal",  emoji: "🌟", color: C.purple },
+      payment:  { label: "Pago",      emoji: "💰", color: C.orange },
+    };
 
-const MODES = {
-  ejecutivo: { name: "Ejecutivo", emoji: "🎯", color: "#a78bfa", prompt: "Eres un COO de élite. Directo, eficiente, sin rodeos. Cada respuesta es concisa y accionable. Máxima eficiencia, cero relleno." },
-  coach:     { name: "Coach",     emoji: "💪", color: "#f472b6", prompt: "Coach brutalmente honesto. Sin excusas. Si hay tareas vencidas, confrontas directamente. Regañas cuando es necesario. CAPS para énfasis." },
-  fun:       { name: "Fun",       emoji: "😂", color: "#fb923c", prompt: "Divertido e irreverente. Humor inteligente sobre productividad. Bromas sobre procrastinación pero siempre llevando a la acción." },
-  hype:      { name: "Hype",      emoji: "🔥", color: "#f97316", prompt: "El hype man definitivo. Cada logro es ÉPICO. Energía pura contagiosa. Celebras hasta los avances pequeños. CAPS frecuentes." },
-  zen:       { name: "Zen",       emoji: "🧘", color: "#818cf8", prompt: "Calmo, sabio, estratégico. Perspectiva elevada. Ayudas a ver el panorama completo sin estrés. Claridad sobre caos." },
-  savage:    { name: "Savage",    emoji: "😤", color: "#f43f5e", prompt: "Sin filtros absolutos. No toleras excusas. Lenguaje directo al punto de ser incómodo. Cada tarea vencida es inaceptable. Obligas a actuar AHORA." },
-};
-
-const EVENT_TYPES = {
-  meeting:  { label: "Reunión",   emoji: "🤝", color: C.teal },
-  call:     { label: "Llamada",   emoji: "📞", color: C.green },
-  task:     { label: "Pendiente", emoji: "✅", color: C.yellow },
-  personal: { label: "Personal",  emoji: "🌟", color: C.purple },
-  payment:  { label: "Pago",      emoji: "💰", color: C.orange },
-};
-
-const REMINDER_OPTIONS = [
-  { value: 0,    label: "A la hora exacta" },
-  { value: 5,    label: "5 min antes" },
-  { value: 10,   label: "10 min antes" },
-  { value: 15,   label: "15 min antes" },
-  { value: 30,   label: "30 min antes" },
-  { value: 60,   label: "1 hora antes" },
-  { value: 120,  label: "2 horas antes" },
-  { value: 1440, label: "1 día antes" },
-];
-
-const todayStr  = () => new Date().toISOString().split("T")[0];
-const uid       = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-const fmtDate   = d => d ? new Date(d + "T12:00:00").toLocaleDateString("es-MX", { day: "numeric", month: "short" }) : "";
-const fmtDay    = d => d ? new Date(d + "T12:00:00").toLocaleDateString("es-MX", { weekday: "short" }) : "";
-const daysUntil = d => { if (!d) return 999; return Math.round((new Date(d + "T12:00:00") - new Date(todayStr() + "T12:00:00")) / 86400000); };
-const priColor  = p => ({ high: C.red, medium: C.yellow, low: C.green }[p] || C.muted);
-const COMPANY_COLORS = [C.teal, C.pink, C.yellow, C.purple, C.orange, C.blue, C.green, C.red, "#ff9900", "#00ccff"];
-
-// ─── get week days starting Monday ────────────────────────────────────────────
-const getWeekDays = (offsetWeeks = 0) => {
-  const now = new Date();
-  const day = now.getDay();
-  const monday = new Date(now);
-  monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1) + offsetWeeks * 7);
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
-    return d.toISOString().split("T")[0];
-  });
-};
-
-export default function NEXUS() {
-  injectFonts();
-  injectGlobalStyles();
-
-  // ── CORE STATE ──────────────────────────────────────────────────────────
-  const [tab, setTab] = useState("dashboard");
-  const [mode, setMode] = useState("ejecutivo");
-  const [showModeSelect, setShowModeSelect] = useState(false);
-  const [showMore, setShowMore] = useState(false);
-  const [moreSection, setMoreSection] = useState("projects");
-
-  // ── DATA ────────────────────────────────────────────────────────────────
-  const [tasks,      setTasks]      = useState([]);
-  const [payments,   setPayments]   = useState([]);
-  const [projects,   setProjects]   = useState([]);
-  const [contacts,   setContacts]   = useState([]);
-  const [finance,    setFinance]    = useState([]);
-  const [routine,    setRoutine]    = useState([]);
-  const [routineLog, setRoutineLog] = useState({});
-  const [events,     setEvents]     = useState([]); // NEW: agenda events
-  const [messages,   setMessages]   = useState([{
-    id: "boot", role: "assistant", mode: "ejecutivo",
-    text: "NEXUS v3 activado. 🎯\n\nAhora tengo agenda completa con calendario semanal, reuniones, llamadas y pendientes con checkbox. Dime todo lo que tienes en la cabeza."
-  }]);
-
-  // ── UI STATE ────────────────────────────────────────────────────────────
-  const [input,       setInput]       = useState("");
-  const [loading,     setLoading]     = useState(false);
-  const [listening,   setListening]   = useState(false);
-  const [ttsEnabled,  setTtsEnabled]  = useState(true);
-  const [modal,       setModal]       = useState(null);
-  const [reminderTask,setReminderTask]= useState(null);
-  const [snoozed,     setSnoozed]     = useState({});
-  const [followUpQueue, setFollowUpQueue] = useState({}); // { id: triggerTimestamp }
-  const [followUpTarget, setFollowUpTarget] = useState(null);
-  const [notifPerm,   setNotifPerm]   = useState("default");
-  const [showFinance,  setShowFinance]  = useState(false);
-  const [unifiedFilter, setUnifiedFilter] = useState("all"); // all|meeting|call|task|personal|projects
-  const [taskFilter,  setTaskFilter]  = useState("pending");
-  // Agenda specific
-  const [agendaView,  setAgendaView]  = useState("week"); // "week" | "list"
-  const [agendaFilter,setAgendaFilter]= useState("all");  // "all"|"meeting"|"call"|"task"|"personal"
-  const [weekOffset,  setWeekOffset]  = useState(0);
-  const [selectedDay, setSelectedDay] = useState(todayStr());
-
-  // ── FORMS ───────────────────────────────────────────────────────────────
-  const [newTask,    setNewTask]    = useState({ title: "", dueDate: todayStr(), project: "", company: "", priority: "medium", notes: "" });
-  const [newPay,     setNewPay]     = useState({ name: "", amount: "", nextDue: todayStr(), company: "Personal" });
-  const [newProj,    setNewProj]    = useState({ name: "", company: "" });
-  const [newContact, setNewContact] = useState({ name: "", phone: "", company: "", notes: "" });
-  const [newFinance, setNewFinance] = useState({ type: "income", amount: "", description: "", company: "", date: todayStr() });
-  const [newHabit,   setNewHabit]   = useState({ title: "", icon: "⭐", time: "", reminders: [0] });
-  const [newEvent,   setNewEvent]   = useState({ title: "", date: todayStr(), time: "09:00", type: "meeting", company: "", contact: "", notes: "", status: "pending", reminders: [15] });
-
-  // ── REFS ────────────────────────────────────────────────────────────────
-  const chatRef  = useRef(null);
-  const inputRef = useRef(null);
-  const recRef   = useRef(null);
-
-  // ── STORAGE ─────────────────────────────────────────────────────────────
-  const persist = useCallback((key, val) => {
-    // Save locally for instant UI
-    try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
-
-  }, []);
-
-  useEffect(() => {
-    const KEYS = [
-      ["nx3_tasks", setTasks], ["nx3_payments", setPayments],
-      ["nx3_projects", setProjects], ["nx3_contacts", setContacts],
-      ["nx3_finance", setFinance], ["nx3_routine", setRoutine],
-      ["nx3_routinelog", setRoutineLog], ["nx3_events", setEvents],
-      ["nx3_messages", v => { if (v?.length) setMessages(v); }],
-      ["nx3_mode", v => { if (v) setMode(v); }],
-      ["nx3_tts", v => { if (v !== undefined) setTtsEnabled(v); }],
+    const REMINDER_OPTIONS = [
+      { value: 0, label: "A la hora exacta" },
+      { value: 5, label: "5 min antes" },
+      { value: 15, label: "15 min antes" },
+      { value: 30, label: "30 min antes" },
+      { value: 60, label: "1 hora antes" },
+      { value: 120, label: "2 horas antes" },
+      { value: 1440, label: "1 día antes" },
     ];
 
-    // 1. Load from localStorage immediately (instant UI)
-    KEYS.forEach(([key, setter]) => {
-      try { const v = localStorage.getItem(key); if (v) setter(JSON.parse(v)); } catch {}
-    });
+    const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    const todayStr = () => { const d = new Date(); return d.toISOString().slice(0, 10); };
+    const fmtDate = (d) => { if (!d) return ""; const p = d.split("-"); return `${p[2]}/${p[1]}`; };
+    const dayName = (d) => new Date(d + "T12:00:00").toLocaleDateString("es-MX", { weekday: "short" }).toUpperCase();
+    const daysDiff = (a, b) => Math.round((new Date(a) - new Date(b)) / 86400000);
+
+    /* ═══════════════════ FIREBASE INIT ═══════════════════ */
+    let db = null;
     try {
-      const md = localStorage.getItem("nx3_modeday");
-      if (!md || JSON.parse(md) !== todayStr()) setShowModeSelect(true);
-    } catch { setShowModeSelect(true); }
+      const firebaseConfig = {
+        apiKey: "AIzaSyB9gOn6-iLDjIH4jjFIJ8Z9IGvYLphsEy0",
+        authDomain: "nexus-bf893.firebaseapp.com",
+        projectId: "nexus-bf893",
+        storageBucket: "nexus-bf893.firebasestorage.app",
+        messagingSenderId: "543867357397",
+        appId: "1:543867357397:web:cf694d8ec6af33c840fa5c"
+      };
+      if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+      db = firebase.firestore();
+    } catch (e) { console.warn("Firebase init failed:", e); }
+    const USER_DOC = "diana";
 
+    /* ═══════════════════ MAIN APP ═══════════════════ */
+    function NEXUS() {
+      /* ─── State ─── */
+      const [tab, setTab] = useState("dashboard");
+      const [mode, setMode] = useState("ejecutivo");
+      const [showModeSelect, setShowModeSelect] = useState(false);
+      const [tasks, setTasks] = useState([]);
+      const [events, setEvents] = useState([]);
+      const [payments, setPayments] = useState([]);
+      const [projects, setProjects] = useState([]);
+      const [contacts, setContacts] = useState([]);
+      const [finance, setFinance] = useState([]);
+      const [routine, setRoutine] = useState([]);
+      const [routineLog, setRoutineLog] = useState({});
+      const [messages, setMessages] = useState([]);
+      const [ttsOn, setTtsOn] = useState(false);
+      const [unifiedFilter, setUnifiedFilter] = useState("all");
+      const [moreTab, setMoreTab] = useState("projects");
+      const [showMore, setShowMore] = useState(false);
 
+      // Modals
+      const [modal, setModal] = useState(null); // "task"|"event"|"payment"|"project"|"contact"|"finance"|"habit"
+      const [editItem, setEditItem] = useState(null);
+      const [reminder, setReminder] = useState(null);
+      const [snoozed, setSnoozed] = useState({});
 
-    if ("Notification" in window) setNotifPerm(Notification.permission);
-  }, []);
+      /* ─── Persist helper ─── */
+      const persist = useCallback((key, val) => {
+        try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
+      }, []);
 
-  const saveTasks    = fn => setTasks(p    => { const n = typeof fn === "function" ? fn(p) : fn; persist("nx3_tasks",      n); return n; });
-  const savePays     = fn => setPayments(p => { const n = typeof fn === "function" ? fn(p) : fn; persist("nx3_payments",   n); return n; });
-  const saveProjs    = fn => setProjects(p => { const n = typeof fn === "function" ? fn(p) : fn; persist("nx3_projects",   n); return n; });
-  const saveContacts = fn => setContacts(p => { const n = typeof fn === "function" ? fn(p) : fn; persist("nx3_contacts",   n); return n; });
-  const saveFinance  = fn => setFinance(p  => { const n = typeof fn === "function" ? fn(p) : fn; persist("nx3_finance",    n); return n; });
-  const saveRoutine  = fn => setRoutine(p  => { const n = typeof fn === "function" ? fn(p) : fn; persist("nx3_routine",    n); return n; });
-  const saveRLog     = fn => setRoutineLog(p => { const n = typeof fn === "function" ? fn(p) : fn; persist("nx3_routinelog", n); return n; });
-  const saveEvents   = fn => setEvents(p   => { const n = typeof fn === "function" ? fn(p) : fn; persist("nx3_events",     n); return n; });
-  const saveMsgs     = fn => setMessages(p => { const n = typeof fn === "function" ? fn(p) : fn; persist("nx3_messages",   n.slice(-60)); return n; });
+      const fireSync = useCallback((key, val) => {
+        if (!db) return;
+        try { db.collection("users").doc(USER_DOC).set({ [key]: JSON.stringify(val), [`${key}_ts`]: Date.now() }, { merge: true }); }
+        catch (e) { console.warn("Firestore write fail:", e); }
+      }, []);
 
-  // ── TTS ─────────────────────────────────────────────────────────────────
-  const speak = useCallback(text => {
-    if (!ttsEnabled || !window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
-    const clean = text.replace(/[*#►\[\]{}→◈▣◉◆⊞]/g, "").replace(/\n+/g, ". ").slice(0, 350);
-    const doSpeak = () => {
-      const u = new SpeechSynthesisUtterance(clean);
-      u.lang = "es-MX"; u.rate = 1.05; u.pitch = 1.0;
-      const voices = window.speechSynthesis.getVoices();
-      const esV = voices.find(v => v.lang === "es-MX") || voices.find(v => v.lang.startsWith("es")) || voices[0];
-      if (esV) u.voice = esV;
-      window.speechSynthesis.speak(u);
-    };
-    if (window.speechSynthesis.getVoices().length > 0) doSpeak();
-    else window.speechSynthesis.onvoiceschanged = doSpeak;
-  }, [ttsEnabled]);
+      const save = useCallback((localKey, setter, val) => {
+        setter(val);
+        persist(localKey, val);
+        fireSync(localKey, val);
+      }, [persist, fireSync]);
 
-  // ── STT ─────────────────────────────────────────────────────────────────
-  const startVoice = useCallback(() => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { alert("Usa Chrome para voz"); return; }
-    if (listening) { recRef.current?.stop(); return; }
-    const r = new SR();
-    r.lang = "es-MX"; r.interimResults = false; r.maxAlternatives = 1;
-    recRef.current = r;
-    r.onstart  = () => setListening(true);
-    r.onend    = () => setListening(false);
-    r.onerror  = () => setListening(false);
-    r.onresult = e => {
-      const t = e.results[0][0].transcript;
-      setInput(prev => (prev ? prev + " " : "") + t);
-      inputRef.current?.focus();
-    };
-    r.start();
-  }, [listening]);
+      /* ─── Load data ─── */
+      useEffect(() => {
+        const KEYS = [
+          ["nx3_tasks", setTasks], ["nx3_events", setEvents], ["nx3_payments", setPayments],
+          ["nx3_projects", setProjects], ["nx3_contacts", setContacts], ["nx3_finance", setFinance],
+          ["nx3_routine", setRoutine], ["nx3_routinelog", setRoutineLog],
+          ["nx3_messages", setMessages], ["nx3_tts", setTtsOn],
+        ];
+        KEYS.forEach(([key, setter]) => {
+          try { const v = localStorage.getItem(key); if (v) setter(JSON.parse(v)); } catch {}
+        });
+        try {
+          const m = localStorage.getItem("nx3_mode");
+          if (m) setMode(JSON.parse(m));
+        } catch {}
+        try {
+          const md = localStorage.getItem("nx3_modeday");
+          if (!md || JSON.parse(md) !== todayStr()) setShowModeSelect(true);
+        } catch { setShowModeSelect(true); }
 
-  // ── NOTIFICATIONS ───────────────────────────────────────────────────────
-  const requestNotif = async () => {
-    const p = await Notification.requestPermission();
-    setNotifPerm(p);
-    if (p === "granted") new Notification("NEXUS activado", { body: "Notificaciones activas. No habrá descanso." });
-  };
-  const pushNotif = useCallback((title, body) => {
-    if (notifPerm === "granted") try { new Notification("NEXUS: " + title, { body }); } catch {}
-  }, [notifPerm]);
+        // Firebase load
+        if (db) {
+          try {
+            db.collection("users").doc(USER_DOC).get().then(doc => {
+              if (!doc.exists) return;
+              const d = doc.data();
+              KEYS.forEach(([key, setter]) => {
+                try {
+                  const localTs = parseInt(localStorage.getItem(key + "_ts") || "0");
+                  const remoteTs = d[key + "_ts"] || 0;
+                  if (remoteTs > localTs && d[key]) {
+                    const parsed = JSON.parse(d[key]);
+                    setter(parsed);
+                    localStorage.setItem(key, d[key]);
+                    localStorage.setItem(key + "_ts", String(remoteTs));
+                  }
+                } catch {}
+              });
+            }).catch(() => {});
+          } catch {}
+        }
 
-  // ── MINUTE-LEVEL CLOCK + ADVANCE REMINDERS + FOLLOW-UP ─────────────────
-  useEffect(() => {
-    const firedRef = { current: new Set() }; // track fired reminders this session
+        // Request notification permission
+        try { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission(); } catch {}
+      }, []);
 
-    const tick = () => {
-      const now = new Date();
-      const nowMs = now.getTime();
-      const todayS = todayStr();
-      const hhmm = now.getHours().toString().padStart(2,"0") + ":" + now.getMinutes().toString().padStart(2,"0");
+      /* ─── Derived data ─── */
+      const today = todayStr();
+      const overdueTasks = useMemo(() => tasks.filter(t => t.status !== "done" && t.dueDate && t.dueDate < today), [tasks, today]);
+      const pendingTasks = useMemo(() => tasks.filter(t => t.status !== "done"), [tasks]);
+      const doneTasks = useMemo(() => tasks.filter(t => t.status === "done"), [tasks]);
+      const todayEvents = useMemo(() => events.filter(e => e.date === today).sort((a, b) => (a.time || "").localeCompare(b.time || "")), [events, today]);
+      const pendingTodayEvents = useMemo(() => todayEvents.filter(e => e.status !== "done"), [todayEvents]);
+      const todayRoutineDone = useMemo(() => {
+        const log = routineLog[today] || {};
+        return routine.filter(h => log[h.id]).length;
+      }, [routine, routineLog, today]);
 
-      // Helper: compute reminder fire time for an event
-      const getReminderTimes = (e) => {
-        if (!e.time || e.date !== todayS) return [];
-        const [h, m] = e.time.split(":").map(Number);
-        const baseMs = new Date(todayS + "T" + e.time + ":00").getTime();
-        return (e.reminders || [0]).map(minBefore => ({
-          minBefore,
-          fireHHMM: (() => {
-            const d = new Date(baseMs - minBefore * 60000);
-            return d.getHours().toString().padStart(2,"0") + ":" + d.getMinutes().toString().padStart(2,"0");
-          })()
-        }));
+      const companies = useMemo(() => {
+        const s = new Set();
+        tasks.forEach(t => t.company && s.add(t.company));
+        events.forEach(e => e.company && s.add(e.company));
+        payments.forEach(p => p.company && s.add(p.company));
+        projects.forEach(p => p.company && s.add(p.company));
+        contacts.forEach(c => c.company && s.add(c.company));
+        finance.forEach(f => f.company && s.add(f.company));
+        return [...s].sort();
+      }, [tasks, events, payments, projects, contacts, finance]);
+
+      const upcomingPayments = useMemo(() => {
+        const in7 = new Date(); in7.setDate(in7.getDate() + 7);
+        const in7s = in7.toISOString().slice(0, 10);
+        return payments.filter(p => p.nextDue && p.nextDue <= in7s && p.nextDue >= today).sort((a, b) => a.nextDue.localeCompare(b.nextDue));
+      }, [payments, today]);
+
+      const monthFinance = useMemo(() => {
+        const ym = today.slice(0, 7);
+        const items = finance.filter(f => f.date && f.date.startsWith(ym));
+        const income = items.filter(f => f.ftype === "income").reduce((s, f) => s + (f.amount || 0), 0);
+        const expense = items.filter(f => f.ftype === "expense").reduce((s, f) => s + (f.amount || 0), 0);
+        return { income, expense, net: income - expense, items };
+      }, [finance, today]);
+
+      /* ─── Unified items for dashboard ─── */
+      const unifiedItems = useMemo(() => {
+        if (unifiedFilter === "projects") return [];
+        const items = [];
+        if (unifiedFilter === "all" || unifiedFilter === "task") {
+          pendingTasks.forEach(t => items.push({ ...t, _kind: "task" }));
+        }
+        if (unifiedFilter !== "task") {
+          events.filter(e => e.status !== "done" && (unifiedFilter === "all" || e.type === unifiedFilter))
+            .forEach(e => items.push({ ...e, _kind: "event" }));
+        }
+        return items.sort((a, b) => {
+          const aD = a.dueDate || a.date || "9999";
+          const bD = b.dueDate || b.date || "9999";
+          if (aD < today && bD >= today) return -1;
+          if (bD < today && aD >= today) return 1;
+          return aD.localeCompare(bD);
+        });
+      }, [unifiedFilter, pendingTasks, events, today]);
+
+      /* ─── Save helpers ─── */
+      const saveTasks = (v) => save("nx3_tasks", setTasks, v);
+      const saveEvents = (v) => save("nx3_events", setEvents, v);
+      const savePayments = (v) => save("nx3_payments", setPayments, v);
+      const saveProjects = (v) => save("nx3_projects", setProjects, v);
+      const saveContacts = (v) => save("nx3_contacts", setContacts, v);
+      const saveFinance = (v) => save("nx3_finance", setFinance, v);
+      const saveRoutine = (v) => save("nx3_routine", setRoutine, v);
+      const saveRoutineLog = (v) => save("nx3_routinelog", setRoutineLog, v);
+      const saveMessages = (v) => save("nx3_messages", setMessages, v);
+
+      const selectMode = (m) => {
+        setMode(m);
+        persist("nx3_mode", m);
+        persist("nx3_modeday", todayStr());
+        fireSync("nx3_mode", m);
+        setShowModeSelect(false);
       };
 
-      // 1. Check follow-up queue
-      const dueFU = Object.entries(followUpQueue).find(([, ts]) => nowMs >= ts);
-      if (dueFU && !followUpTarget && !reminderTask) {
-        const [fid] = dueFU;
-        const ev = events.find(e => e.id === fid && e.status !== "done");
-        const rout = routine.find(r => r.id === fid);
-        const routDone = rout ? !!((routineLog[todayS]||{})[fid]) : true;
-        const target = ev || (!routDone && rout ? rout : null);
-        if (target) {
-          const lbl = ev ? (EVENT_TYPES[target.type]?.label || "Evento") : "Rutina";
-          speak(`Han pasado 15 minutos. ¿Ya completaste: ${target.title}?`);
-          pushNotif("❓ ¿Lo cumpliste?", target.title);
-          setFollowUpTarget({ ...target, isFollowUp: true, isRoutineFollowUp: !!rout });
-        }
-        setFollowUpQueue(q => { const n={...q}; delete n[fid]; return n; });
-        return;
-      }
+      const toggleTask = (id) => {
+        const updated = tasks.map(t => t.id === id ? { ...t, status: t.status === "done" ? "pending" : "done" } : t);
+        saveTasks(updated);
+      };
 
-      if (reminderTask || followUpTarget) return;
+      const toggleEvent = (id) => {
+        const updated = events.map(e => e.id === id ? { ...e, status: e.status === "done" ? "pending" : "done" } : e);
+        saveEvents(updated);
+      };
 
-      // 2. Advance + exact reminders for events
-      for (const ev of events) {
-        if (ev.status === "done") continue;
-        if (snoozed[ev.id] && snoozed[ev.id] > nowMs) continue;
-        const reminderTimes = getReminderTimes(ev);
-        for (const { minBefore, fireHHMM } of reminderTimes) {
-          if (fireHHMM !== hhmm) continue;
-          const fireKey = `${ev.id}-${minBefore}`;
-          if (firedRef.current.has(fireKey)) continue;
-          firedRef.current.add(fireKey);
-          const isNow = minBefore === 0;
-          const label = isNow ? "ES HORA" : `EN ${minBefore < 60 ? minBefore + " MIN" : (minBefore/60) + "H"}`;
-          speak(isNow
-            ? `Es hora. ${EVENT_TYPES[ev.type]?.label}: ${ev.title}.`
-            : `Recordatorio. En ${minBefore < 60 ? minBefore + " minutos" : (minBefore/60 === 1 ? "una hora" : (minBefore/60) + " horas")}: ${ev.title}.`
-          );
-          pushNotif(`⏰ ${label}: ${EVENT_TYPES[ev.type]?.label}`, ev.title);
-          if (isNow) setFollowUpQueue(q => ({ ...q, [ev.id]: nowMs + 15 * 60 * 1000 }));
-          setReminderTask({ ...ev, isExactTime: isNow, isAdvance: !isNow, minBefore });
-          return;
-        }
-      }
+      const toggleRoutineItem = (hid) => {
+        const log = { ...routineLog };
+        if (!log[today]) log[today] = {};
+        log[today][hid] = !log[today][hid];
+        saveRoutineLog(log);
+      };
 
-      // 3. Advance + exact reminders for routine habits
-      for (const r of routine) {
-        if (!r.time || (routineLog[todayS]||{})[r.id]) continue;
-        if (snoozed[r.id] && snoozed[r.id] > nowMs) continue;
-        const reminders = r.reminders || [0];
-        const baseMs = new Date(todayS + "T" + r.time + ":00").getTime();
-        for (const minBefore of reminders) {
-          const fireD = new Date(baseMs - minBefore * 60000);
-          const fireHHMM = fireD.getHours().toString().padStart(2,"0") + ":" + fireD.getMinutes().toString().padStart(2,"0");
-          if (fireHHMM !== hhmm) continue;
-          const fireKey = `${r.id}-${minBefore}`;
-          if (firedRef.current.has(fireKey)) continue;
-          firedRef.current.add(fireKey);
-          const isNow = minBefore === 0;
-          speak(isNow
-            ? `Hora de tu rutina: ${r.title}.`
-            : `En ${minBefore < 60 ? minBefore + " minutos" : "una hora"}: ${r.title}.`
-          );
-          pushNotif(isNow ? "⭐ RUTINA AHORA" : `⭐ EN ${minBefore} MIN`, r.title);
-          if (isNow) setFollowUpQueue(q => ({ ...q, [r.id]: nowMs + 15 * 60 * 1000 }));
-          setReminderTask({ ...r, isRoutine: true, isExactTime: isNow, isAdvance: !isNow, minBefore });
-          return;
-        }
-      }
+      const deleteTask = (id) => saveTasks(tasks.filter(t => t.id !== id));
+      const deleteEvent = (id) => saveEvents(events.filter(e => e.id !== id));
 
-      // 4. Overdue tasks every 10 min
-      if (now.getMinutes() % 10 === 0) {
-        const overdue = tasks.filter(t => t.status !== "done" && t.dueDate < todayS && (!snoozed[t.id] || snoozed[t.id] < nowMs));
-        if (overdue[0]) {
-          speak(`Pendiente sin resolver: ${overdue[0].title}.`);
-          pushNotif("⚠️ PENDIENTE VENCIDO", overdue[0].title);
-          setReminderTask(overdue[0]);
-        }
-      }
-    };
+      /* ─── Process AI actions ─── */
+      const processActions = useCallback((text) => {
+        const m = text.match(/---ACTIONS---([\s\S]*?)---END---/);
+        if (!m) return text.replace(/---ACTIONS---[\s\S]*?---END---/g, "").trim();
+        try {
+          const { actions } = JSON.parse(m[1]);
+          actions.forEach(a => {
+            switch (a.type) {
+              case "addTask": saveTasks([...tasks, { id: uid(), title: a.title, dueDate: a.dueDate, project: a.project || "", company: a.company || "", priority: a.priority || "medium", notes: a.notes || "", status: "pending" }]); break;
+              case "addEvent": saveEvents([...events, { id: uid(), title: a.title, date: a.date, time: a.time || "", type: a.evtype || "task", company: a.company || "", contact: a.contact || "", notes: a.notes || "", status: "pending", reminders: [15] }]); break;
+              case "addPayment": savePayments([...payments, { id: uid(), name: a.name, amount: a.amount, nextDue: a.nextDue, company: a.company || "" }]); break;
+              case "addProject": saveProjects([...projects, { id: uid(), name: a.name, company: a.company || "" }]); break;
+              case "addContact": saveContacts([...contacts, { id: uid(), name: a.name, phone: a.phone || "", company: a.company || "", notes: a.notes || "" }]); break;
+              case "addFinance": saveFinance([...finance, { id: uid(), ftype: a.ftype, amount: a.amount, description: a.description || "", company: a.company || "", date: a.date || todayStr() }]); break;
+              case "completeTask": saveTasks(tasks.map(t => t.id === a.id ? { ...t, status: "done" } : t)); break;
+              case "completeEvent": saveEvents(events.map(e => e.id === a.id ? { ...e, status: "done" } : e)); break;
+              case "addHabit": saveRoutine([...routine, { id: uid(), title: a.title, icon: a.icon || "⭐" }]); break;
+            }
+          });
+        } catch (e) { console.warn("Action parse error:", e); }
+        return text.replace(/---ACTIONS---[\s\S]*?---END---/g, "").trim();
+      }, [tasks, events, payments, projects, contacts, finance, routine]);
 
-    tick();
-    const interval = setInterval(tick, 60 * 1000);
-    return () => clearInterval(interval);
-  }, [tasks, events, routine, routineLog, snoozed, followUpQueue, followUpTarget, reminderTask, speak, pushNotif]);
+      /* ─── Reminder system ─── */
+      useEffect(() => {
+        const check = () => {
+          const now = new Date();
+          const nowMin = now.getHours() * 60 + now.getMinutes();
+          const todayS = todayStr();
 
-  useEffect(() => { if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight; }, [messages, loading]);
+          // Check event reminders
+          events.forEach(ev => {
+            if (ev.status === "done" || ev.date !== todayS || !ev.time || !ev.reminders) return;
+            const [h, m] = ev.time.split(":").map(Number);
+            const evMin = h * 60 + m;
+            ev.reminders.forEach(r => {
+              const triggerMin = evMin - r;
+              if (nowMin === triggerMin && !snoozed[ev.id + "_" + r]) {
+                setReminder({ ...ev, reminderType: r === 0 ? "exact" : "advance", minBefore: r });
+                try { if ("Notification" in window && Notification.permission === "granted") new Notification("NEXUS", { body: `${r > 0 ? r + " min para: " : ""}${ev.title}`, icon: "📅" }); } catch {}
+              }
+            });
+          });
 
-  // ── AI ──────────────────────────────────────────────────────────────────
-  const buildContext = useCallback(() => {
-    const overdue   = tasks.filter(t => t.status !== "done" && t.dueDate < todayStr());
-    const todayT    = tasks.filter(t => t.status !== "done" && t.dueDate === todayStr());
-    const upcoming  = tasks.filter(t => t.status !== "done" && t.dueDate > todayStr()).slice(0, 5);
-    const urgPays   = payments.filter(p => { const d = daysUntil(p.nextDue); return d >= 0 && d <= 7; });
-    const todayEvs  = events.filter(e => e.date === todayStr() && e.status !== "done").sort((a,b) => (a.time||"").localeCompare(b.time||""));
-    const upcomingE = events.filter(e => e.date > todayStr() && e.status !== "done").slice(0, 5);
-    const mIncome   = finance.filter(f => f.type === "income"  && f.date?.startsWith(todayStr().slice(0,7))).reduce((s,f) => s+f.amount, 0);
-    const mExp      = finance.filter(f => f.type === "expense" && f.date?.startsWith(todayStr().slice(0,7))).reduce((s,f) => s+f.amount, 0);
-    const cos       = [...new Set([...projects.map(p=>p.company), ...payments.map(p=>p.company), ...tasks.map(t=>t.company)].filter(Boolean))];
-    return `=== NEXUS CONTEXTO ===
-FECHA: ${new Date().toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
-EMPRESAS: ${cos.join(", ")||"ninguna"}
-VENCIDAS [${overdue.length}]: ${overdue.map(t=>`[${t.id}]"${t.title}"(${Math.abs(daysUntil(t.dueDate))}d)`).join(" | ")||"ninguna"}
-TAREAS HOY: ${todayT.map(t=>`"${t.title}"(${t.priority})`).join(", ")||"ninguna"}
-PRÓXIMAS: ${upcoming.map(t=>`"${t.title}"(${fmtDate(t.dueDate)})`).join(", ")||"ninguna"}
-AGENDA HOY: ${todayEvs.map(e=>`[${e.id}]${EVENT_TYPES[e.type]?.emoji}"${e.title}"${e.time?`@${e.time}`:""}`).join(" | ")||"nada"}
-AGENDA PRÓXIMA: ${upcomingE.map(e=>`"${e.title}"(${fmtDate(e.date)},${EVENT_TYPES[e.type]?.emoji})`).join(", ")||"nada"}
-PAGOS 7d: ${urgPays.map(p=>`"${p.name}"$${p.amount}(${fmtDate(p.nextDue)})`).join(", ")||"ninguno"}
-FINANZAS MES: +$${mIncome.toLocaleString()} -$${mExp.toLocaleString()} Neto$${(mIncome-mExp).toLocaleString()}
-PROYECTOS: ${projects.map(p=>p.name+"("+p.company+")").join(", ")||"ninguno"}
-======================`;
-  }, [tasks, payments, projects, contacts, finance, events]);
+          // Check overdue tasks
+          if (nowMin % 10 === 0) {
+            const od = tasks.filter(t => t.status !== "done" && t.dueDate && t.dueDate < todayS && !snoozed["task_" + t.id]);
+            if (od.length > 0 && !reminder) {
+              setReminder({ title: `${od.length} tarea${od.length > 1 ? "s" : ""} vencida${od.length > 1 ? "s" : ""}`, reminderType: "overdue", tasks: od });
+              try { if ("Notification" in window && Notification.permission === "granted") new Notification("NEXUS", { body: `Tienes ${od.length} tareas vencidas` }); } catch {}
+            }
+          }
+        };
+        const iv = setInterval(check, 60000);
+        check();
+        return () => clearInterval(iv);
+      }, [events, tasks, snoozed, reminder]);
 
-  const buildSystem = useCallback(() => {
-    const M = MODES[mode];
-    return `Tu nombre es NEXUS. Asistente ejecutivo personal de ultra-performance para alguien que maneja 6+ empresas.
+      const snoozeReminder = (id, minutes) => {
+        setSnoozed(prev => ({ ...prev, [id]: Date.now() + minutes * 60000 }));
+        setReminder(null);
+      };
 
-PERSONALIDAD HOY: ${M.name} ${M.emoji}
-${M.prompt}
+      /* ─── Styles ─── */
+      const s = {
+        root: { height: "100vh", display: "flex", flexDirection: "column", maxWidth: 520, margin: "0 auto", position: "relative", backgroundImage: "radial-gradient(circle, #1e1b4b33 1px, transparent 1px)", backgroundSize: "24px 24px", fontFamily: "'Outfit', sans-serif" },
+        header: { padding: "12px 16px 8px", display: "flex", alignItems: "center", justifyContent: "space-between" },
+        logo: { fontFamily: "'Bebas Neue', cursive", fontSize: 28, letterSpacing: 6, background: C.grad, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" },
+        main: { flex: 1, overflowY: "auto", overflowX: "hidden", padding: "0 16px 16px", WebkitOverflowScrolling: "touch" },
+        nav: { display: "flex", borderTop: `1px solid ${C.border}`, background: C.bg, paddingBottom: "env(safe-area-inset-bottom)" },
+        navBtn: (active) => ({ flex: 1, padding: "10px 4px 8px", background: "none", color: active ? C.teal : C.muted, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, fontSize: 10, fontWeight: 600, letterSpacing: 1, cursor: "pointer", position: "relative", transition: "color 0.2s" }),
+        card: { background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 14, marginBottom: 10, animation: "fadeIn 0.3s ease" },
+        btn: (bg) => ({ background: bg || C.grad, color: "#fff", border: "none", borderRadius: 8, padding: "10px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer", letterSpacing: 0.5 }),
+        input: { width: "100%", background: C.card2, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 12px", color: C.text, fontSize: 14 },
+        badge: (bg) => ({ background: bg || C.red, color: "#fff", borderRadius: 10, padding: "1px 6px", fontSize: 10, fontWeight: 700, position: "absolute", top: 4, right: "calc(50% - 16px)" }),
+        tag: (color) => ({ display: "inline-block", background: color + "22", color: color, borderRadius: 6, padding: "2px 8px", fontSize: 11, fontWeight: 600 }),
+        modal: { position: "fixed", inset: 0, zIndex: 100, display: "flex", flexDirection: "column", justifyContent: "flex-end" },
+        overlay: { position: "absolute", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" },
+        sheet: { position: "relative", background: C.bg, borderTop: `1px solid ${C.border}`, borderRadius: "16px 16px 0 0", padding: "20px 16px", maxHeight: "85vh", overflowY: "auto", animation: "slideUp 0.3s ease", paddingBottom: "calc(20px + env(safe-area-inset-bottom))" },
+      };
 
-REGLAS:
-1. SIEMPRE en español. Máximo 3-4 oraciones normalmente.
-2. Para agregar items incluye al final exactamente:
----ACTIONS---
-{"actions":[
-  {"type":"addTask","title":"","dueDate":"YYYY-MM-DD","project":"","company":"","priority":"high|medium|low","notes":""},
-  {"type":"addEvent","title":"","date":"YYYY-MM-DD","time":"HH:MM","evtype":"meeting|call|task|personal|payment","company":"","contact":"","notes":""},
-  {"type":"addPayment","name":"","amount":0,"nextDue":"YYYY-MM-DD","company":""},
-  {"type":"addProject","name":"","company":""},
-  {"type":"addContact","name":"","phone":"","company":"","notes":""},
-  {"type":"addFinance","ftype":"income|expense","amount":0,"description":"","company":"","date":"YYYY-MM-DD"},
-  {"type":"completeTask","id":"ID_EXACTO"},
-  {"type":"completeEvent","id":"ID_EXACTO"},
-  {"type":"addHabit","title":"","icon":"⭐"}
-]}
----END---
-3. Solo incluye JSON si hay acciones concretas. Detecta empresa del contexto.
-5. Tienes capacidad de búsqueda web. Úsala cuando el usuario pregunte sobre noticias, precios, investigación, competidores o cualquier información externa. Responde con lo que encuentres.
-4. Para eventos de agenda usa addEvent con evtype: meeting=reunión, call=llamada, task=pendiente.
-
-${buildContext()}`;
-  }, [mode, buildContext]);
-
-  const parseResp = raw => {
-    const m = raw.match(/---ACTIONS---\s*([\s\S]*?)\s*---END---/);
-    const text = raw.replace(/---ACTIONS---[\s\S]*?---END---/g, "").trim();
-    if (!m) return { text, actions: [] };
-    try { return { text, actions: JSON.parse(m[1].trim()).actions || [] }; }
-    catch { return { text, actions: [] }; }
-  };
-
-  const execActions = useCallback(actions => {
-    let count = 0;
-    actions.forEach(a => {
-      if (a.type === "addTask" && a.title)    { saveTasks(p    => [...p, { id: uid(), title: a.title, dueDate: a.dueDate||todayStr(), project: a.project||"", company: a.company||"", priority: a.priority||"medium", status: "pending", createdAt: todayStr(), notes: a.notes||"" }]); count++; }
-      else if (a.type === "addEvent" && a.title) { saveEvents(p => [...p, { id: uid(), title: a.title, date: a.date||todayStr(), time: a.time||"", type: a.evtype||"meeting", company: a.company||"", contact: a.contact||"", notes: a.notes||"", status: "pending", reminders: a.reminders||[15] }]); count++; }
-      else if (a.type === "addPayment" && a.name) { savePays(p => [...p, { id: uid(), name: a.name, amount: Number(a.amount)||0, nextDue: a.nextDue||todayStr(), company: a.company||"Personal" }]); count++; }
-      else if (a.type === "addProject" && a.name) { saveProjs(p => [...p, { id: uid(), name: a.name, company: a.company||"General", color: COMPANY_COLORS[p.length % COMPANY_COLORS.length], notes: "" }]); count++; }
-      else if (a.type === "addContact" && a.name) { saveContacts(p => [...p, { id: uid(), name: a.name, phone: a.phone||"", company: a.company||"", notes: a.notes||"" }]); count++; }
-      else if (a.type === "addFinance")  { saveFinance(p => [...p, { id: uid(), type: a.ftype||"income", amount: Number(a.amount)||0, description: a.description||"", company: a.company||"", date: a.date||todayStr() }]); count++; }
-      else if (a.type === "completeTask"  && a.id) { saveTasks(p  => p.map(t => t.id===a.id ? {...t, status:"done", completedAt:todayStr()} : t)); }
-      else if (a.type === "completeEvent" && a.id) { saveEvents(p => p.map(e => e.id===a.id ? {...e, status:"done"} : e)); }
-      else if (a.type === "addHabit" && a.title)   { saveRoutine(p => [...p, { id: uid(), title: a.title, icon: a.icon||"⭐" }]); count++; }
-    });
-    return count;
-  }, []);
-
-  const sendMsg = async (override) => {
-    const text = (override || input).trim();
-    if (!text || loading) return;
-    const userMsg = { id: uid(), role: "user", text };
-    saveMsgs(prev => [...prev, userMsg]);
-    setInput(""); setLoading(true);
-    inputRef.current?.focus();
-    try {
-      const hist = [...messages, userMsg].slice(-14).map(m => ({ role: m.role==="user"?"user":"assistant", content: m.text }));
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514", max_tokens: 1000,
-          system: buildSystem(), messages: hist,
-          tools: [{ type: "web_search_20250305", name: "web_search" }]
-        })
-      });
-      const data = await res.json();
-      const raw = (data.content || []).map(b => b.type === "text" ? b.text : "").filter(Boolean).join("\n") || "Sin respuesta.";
-      const { text: aiText, actions } = parseResp(raw);
-      const added = execActions(actions);
-      const aiMsg = { id: uid(), role: "assistant", text: aiText, mode, addedItems: added };
-      saveMsgs(prev => [...prev, aiMsg]);
-      speak(aiText);
-      if (added > 0) pushNotif("Registrado ✓", `${added} item(s) en el sistema`);
-    } catch {
-      saveMsgs(prev => [...prev, { id: uid(), role: "assistant", text: "⚠️ Error de conexión.", mode }]);
-    }
-    setLoading(false);
-  };
-
-  // ── DERIVED ─────────────────────────────────────────────────────────────
-  const M             = MODES[mode];
-  const overdueTasks  = tasks.filter(t => t.status !== "done" && t.dueDate < todayStr());
-  const todayTasks    = tasks.filter(t => t.status !== "done" && t.dueDate === todayStr());
-  const pendingTasks  = tasks.filter(t => t.status !== "done");
-  const doneTasks     = tasks.filter(t => t.status === "done");
-  const urgentPays    = payments.filter(p => { const d = daysUntil(p.nextDue); return d >= 0 && d <= 7; });
-  const todayEvents   = events.filter(e => e.date === todayStr()).sort((a,b) => (a.time||"99").localeCompare(b.time||"99"));
-  const allCompanies  = [...new Set([...projects.map(p=>p.company), ...payments.map(p=>p.company), ...tasks.map(t=>t.company)].filter(Boolean))];
-  const todayRLog     = routineLog[todayStr()] || {};
-  const routineDone   = routine.filter(r => todayRLog[r.id]).length;
-  const mIncome       = finance.filter(f => f.type === "income"  && f.date?.startsWith(todayStr().slice(0,7))).reduce((s,f)=>s+f.amount,0);
-  const mExp          = finance.filter(f => f.type === "expense" && f.date?.startsWith(todayStr().slice(0,7))).reduce((s,f)=>s+f.amount,0);
-  const weekDays      = getWeekDays(weekOffset);
-  const selectedDayEvents = events.filter(e => e.date === selectedDay).sort((a,b) => (a.time||"99").localeCompare(b.time||"99"));
-  const pendingEvents = events.filter(e => e.status !== "done");
-  const unifiedItems = (() => {
-    if (unifiedFilter === "projects") return [];
-    const items = [];
-    if (unifiedFilter === "all" || unifiedFilter === "task") {
-      pendingTasks.forEach(t => items.push({ ...t, _kind: "task" }));
-    }
-    const evFilter = unifiedFilter === "all" ? null : unifiedFilter;
-    if (unifiedFilter !== "task") {
-      events.filter(e => e.status !== "done" && (!evFilter || e.type === evFilter))
-        .forEach(e => items.push({ ...e, _kind: "event" }));
-    }
-    return items.sort((a, b) => {
-      const aDate = a.dueDate || a.date || "9999";
-      const bDate = b.dueDate || b.date || "9999";
-      if (aDate < todayStr() && bDate >= todayStr()) return -1;
-      if (bDate < todayStr() && aDate >= todayStr()) return 1;
-      if (aDate !== bDate) return aDate.localeCompare(bDate);
-      return (a.time || "23:59").localeCompare(b.time || "23:59");
-    });
-  })();
-
-  // ── STYLES ──────────────────────────────────────────────────────────────
-  const $ = {
-    root:    { background: C.bg, height: "100vh", display: "flex", flexDirection: "column", fontFamily: "'Outfit', sans-serif", color: C.text, overflow: "hidden", maxWidth: 520, margin: "0 auto", backgroundImage: "radial-gradient(circle, #1e1b4b33 1px, transparent 1px)", backgroundSize: "24px 24px" },
-    hdr:     { background: "rgba(4,4,10,0.92)", backdropFilter: "blur(20px)", borderBottom: `1px solid ${C.border}`, padding: "12px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 },
-    logo:    { fontFamily: "'Bebas Neue', cursive", fontSize: 26, letterSpacing: 6, background: "linear-gradient(135deg, #a78bfa, #f97316)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" },
-    scroll:  { flex: 1, overflowY: "auto", padding: "16px 16px 8px" },
-    chatWrap:{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" },
-    chatScroll:{ flex: 1, overflowY: "auto", padding: "12px 16px" },
-    chatBar: { display: "flex", gap: 8, padding: "12px 16px", background: "rgba(4,4,10,0.95)", borderTop: `1px solid ${C.border}`, flexShrink: 0, backdropFilter: "blur(20px)" },
-    nav:     { display: "flex", background: "rgba(4,4,10,0.95)", borderTop: `1px solid ${C.border}`, flexShrink: 0, backdropFilter: "blur(20px)" },
-    navB:    k => ({ flex: 1, padding: "10px 0", background: "none", border: "none", color: tab===k ? M.color : "#334155", cursor: "pointer", fontSize: 9, display: "flex", flexDirection: "column", alignItems: "center", gap: 3, fontFamily: "'Outfit', sans-serif", letterSpacing: 0.5, fontWeight: 600, transition: "color 0.2s", position: "relative" }),
-    badge2:  col => ({ position: "absolute", top: 4, right: "calc(50% - 14px)", background: col, borderRadius: 10, padding: "1px 5px", fontSize: 8, color: C.bg, fontWeight: 700 }),
-    card:    { background: "rgba(9,9,15,0.8)", border: `1px solid ${C.border}`, borderRadius: 16, padding: 16, marginBottom: 12, backdropFilter: "blur(10px)" },
-    sHd:     { fontFamily: "'Bebas Neue', cursive", fontSize: 22, letterSpacing: 5, color: M.color, marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" },
-    row:     { display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 0", borderBottom: `1px solid ${C.border}` },
-    chk:     done => ({ width: 20, height: 20, border: `2px solid ${done ? "#34d399" : "#1e293b"}`, borderRadius: 6, background: done ? "#34d39920":"rgba(255,255,255,0.03)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginTop: 2, transition: "all 0.2s" }),
-    bdg:     col => ({ display: "inline-flex", padding: "2px 8px", borderRadius: 20, background: col+"18", color: col, fontSize: 9, fontWeight: 700, fontFamily: "'Outfit', sans-serif", letterSpacing: 0.5 }),
-    inp:     { width: "100%", background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 14px", color: C.text, fontFamily: "'Outfit', sans-serif", fontSize: 13, outline: "none", boxSizing: "border-box", transition: "border-color 0.2s" },
-    sel:     { width: "100%", background: "rgba(255,255,255,0.04)", border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 14px", color: C.text, fontFamily: "'Outfit', sans-serif", fontSize: 13, outline: "none", boxSizing: "border-box" },
-    btn:     (col, sm) => ({ padding: sm ? "5px 10px" : "9px 16px", background: col+"15", border: `1px solid ${col}40`, borderRadius: 10, color: col, cursor: "pointer", fontFamily: "'Outfit', sans-serif", fontSize: sm ? 10 : 12, fontWeight: 600, letterSpacing: 0.3, transition: "all 0.15s", whiteSpace: "nowrap" }),
-    btnS:    col => ({ padding: "11px 18px", background: "linear-gradient(135deg, #7c3aed, #ea580c)", border: "none", borderRadius: 10, color: "#fff", cursor: "pointer", fontFamily: "'Outfit', sans-serif", fontSize: 13, fontWeight: 700, letterSpacing: 0.5 }),
-    bubble:  role => ({ maxWidth: "84%", padding: "12px 15px", borderRadius: role==="user"?"18px 18px 4px 18px":"18px 18px 18px 4px", background: role==="user"?"linear-gradient(135deg, #7c3aed25, #ea580c20)":"rgba(9,9,15,0.9)", border: `1px solid ${role==="user"?M.color+"35":C.border}`, fontSize: 13.5, lineHeight: 1.7, whiteSpace: "pre-wrap", fontFamily: "'Outfit', sans-serif" }),
-    lbl:     { fontSize: 10, color: "#64748b", letterSpacing: 2, marginBottom: 6, display: "block", textTransform: "uppercase", fontWeight: 600, fontFamily: "'Outfit', sans-serif" },
-    overlay: { position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)", zIndex: 300, display: "flex", alignItems: "flex-end" },
-    modal:   { background: "rgba(6,6,12,0.97)", backdropFilter: "blur(30px)", borderRadius: "20px 20px 0 0", padding: 22, width: "100%", border: `1px solid ${C.border}`, borderBottom: "none", maxHeight: "88vh", overflowY: "auto", boxSizing: "border-box" },
-    mHd:     { fontFamily: "'Bebas Neue', cursive", fontSize: 24, background: "linear-gradient(135deg, #a78bfa, #f97316)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", marginBottom: 20, letterSpacing: 4 },
-    fg:      { marginBottom: 12 },
-    r2:      { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 },
-    del:     { background: "none", border: "none", color: C.muted, cursor: "pointer", padding: "4px 6px", fontSize: 15, lineHeight: 1, flexShrink: 0 },
-    statN:   { fontFamily: "'Bebas Neue', cursive", lineHeight: 1, letterSpacing: 1 },
-    statL:   { fontSize: 9, color: "#475569", letterSpacing: 2.5, textTransform: "uppercase", marginTop: 3, fontFamily: "'Outfit', sans-serif", fontWeight: 600 },
-  };
-
-  const QUICK = [
-    { l: "📋 Briefing",  t: "Dame un briefing completo de todo lo que tengo pendiente hoy, incluyendo agenda y reuniones" },
-    { l: "📅 Agenda",    t: "¿Qué tengo en mi agenda hoy y esta semana?" },
-    { l: "⚠️ Urgente",   t: "¿Cuáles son mis tareas más urgentes y vencidas ahora mismo?" },
-    { l: "💰 Pagos",     t: "¿Qué pagos tengo próximos esta semana?" },
-    { l: "🎯 Foco",      t: "¿En qué debo enfocarme primero ahora mismo? Dame una sola respuesta." },
-    { l: "💪 Motivar",   t: "Necesito motivación para arrancar ahora. Dime algo que me mueva." },
-  ];
-
-  // ════════════════════════════════════════════════════════════════════════
-  // EVENT CARD COMPONENT
-  // ════════════════════════════════════════════════════════════════════════
-  const EventCard = ({ ev, showDate = false }) => {
-    const ET = EVENT_TYPES[ev.type] || EVENT_TYPES.meeting;
-    const done = ev.status === "done";
-    return (
-      <div style={{ display: "flex", gap: 10, padding: "10px 0", borderBottom: `1px solid ${C.border}`, opacity: done ? 0.5 : 1 }}>
-        {/* Type dot + checkbox */}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, flexShrink: 0 }}>
-          <div style={{ ...$.chk(done), borderColor: done ? C.green : ET.color }}
-            onClick={() => saveEvents(prev => prev.map(e => e.id === ev.id ? { ...e, status: done ? "pending" : "done" } : e))}>
-            {done && <span style={{ color: C.green, fontWeight: 700, fontSize: 11 }}>✓</span>}
-          </div>
-          <span style={{ fontSize: 14 }}>{ET.emoji}</span>
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, textDecoration: done ? "line-through" : "none", fontWeight: 600 }}>{ev.title}</div>
-          <div style={{ display: "flex", gap: 5, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}>
-            {ev.time && <span style={{ color: ET.color, fontSize: 11, fontWeight: 700 }}>🕐 {ev.time}</span>}
-            {showDate && <span style={{ color: C.muted, fontSize: 10 }}>{fmtDate(ev.date)}</span>}
-            <span style={$.bdg(ET.color)}>{ET.label}</span>
-            {ev.company && <span style={$.bdg(M.color)}>{ev.company}</span>}
-          </div>
-          {ev.contact && <div style={{ fontSize: 10, color: C.muted, marginTop: 3 }}>👤 {ev.contact}</div>}
-          {ev.notes && <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{ev.notes}</div>}
-          {ev.reminders?.length > 0 && ev.time && !done && (
-            <div style={{ display: "flex", gap: 4, marginTop: 4, flexWrap: "wrap" }}>
-              {ev.reminders.map(r => (
-                <span key={r} style={{ fontSize: 9, color: ET.color, background: ET.color+"15", padding: "1px 6px", borderRadius: 10 }}>
-                  🔔 {r === 0 ? "exacto" : r < 60 ? r+"min antes" : (r/60)+"h antes"}
-                </span>
+      /* ═══════════════════ MODE SELECT SCREEN ═══════════════════ */
+      function ModeSelect() {
+        return (
+          <div style={{ position: "fixed", inset: 0, zIndex: 200, background: C.bg, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: 24, backgroundImage: "radial-gradient(circle, #1e1b4b33 1px, transparent 1px)", backgroundSize: "24px 24px" }}>
+            <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 20, letterSpacing: 4, color: C.muted, marginBottom: 8 }}>NEXUS</div>
+            <h1 style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 36, letterSpacing: 4, background: "linear-gradient(135deg, #a78bfa, #f97316)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", marginBottom: 32, textAlign: "center" }}>¿CÓMO OPERAS HOY?</h1>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, width: "100%", maxWidth: 400 }}>
+              {Object.entries(MODES).map(([key, m]) => (
+                <button key={key} onClick={() => selectMode(key)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "20px 12px", cursor: "pointer", transition: "all 0.2s", display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }} onMouseOver={e => { e.currentTarget.style.borderColor = m.color; e.currentTarget.style.transform = "scale(1.03)"; }} onMouseOut={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.transform = "scale(1)"; }}>
+                  <span style={{ fontSize: 32 }}>{m.emoji}</span>
+                  <span style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 18, letterSpacing: 3, color: m.color }}>{m.name.toUpperCase()}</span>
+                  <span style={{ fontSize: 11, color: C.muted, lineHeight: 1.3, textAlign: "center" }}>{m.prompt.slice(0, 50)}…</span>
+                </button>
               ))}
             </div>
-          )}
-        </div>
-        <button style={$.del} onClick={() => saveEvents(prev => prev.filter(x => x.id !== ev.id))}>×</button>
-      </div>
-    );
-  };
-
-  // ════════════════════════════════════════════════════════════════════════
-  // AGENDA SECTION
-  // ════════════════════════════════════════════════════════════════════════
-  const Agenda = () => {
-    // Filter quick buttons
-    const FILTERS = [
-      { k: "all",      l: "📋 Todo",      count: pendingEvents.length },
-      { k: "meeting",  l: "🤝 Reuniones", count: events.filter(e=>e.type==="meeting"&&e.status!=="done").length },
-      { k: "call",     l: "📞 Llamadas",  count: events.filter(e=>e.type==="call"&&e.status!=="done").length },
-      { k: "task",     l: "✅ Pendientes",count: events.filter(e=>e.type==="task"&&e.status!=="done").length },
-      { k: "personal", l: "🌟 Personal",  count: events.filter(e=>e.type==="personal"&&e.status!=="done").length },
-    ];
-
-    const filteredEvents = events.filter(e => agendaFilter === "all" || e.type === agendaFilter);
-    const today = todayStr();
-
-    // Group by date for list view
-    const grouped = {};
-    filteredEvents.sort((a,b) => a.date.localeCompare(b.date) || (a.time||"").localeCompare(b.time||"")).forEach(e => {
-      grouped[e.date] = grouped[e.date] || [];
-      grouped[e.date].push(e);
-    });
-
-    const selectedFiltered = selectedDayEvents.filter(e => agendaFilter === "all" || e.type === agendaFilter);
-
-    const doneTodayCount = todayEvents.filter(e => e.status === "done").length;
-    const totalTodayCount = todayEvents.length;
-
-    return (
-      <div>
-        {/* Header */}
-        <div style={$.sHd}>
-          <span>AGENDA</span>
-          <button style={$.btn(M.color)} onClick={() => { setNewEvent(p => ({ ...p, date: selectedDay })); setModal("event"); }}>+ EVENTO</button>
-        </div>
-
-        {/* Quick summary pills */}
-        <div style={{ overflowX: "auto", display: "flex", gap: 6, marginBottom: 14, paddingBottom: 2 }}>
-          {FILTERS.map(f => (
-            <button key={f.k} style={{ ...$.btn(agendaFilter === f.k ? M.color : C.muted, true), flexShrink: 0, position: "relative" }}
-              onClick={() => setAgendaFilter(f.k)}>
-              {f.l}
-              {f.count > 0 && <span style={{ marginLeft: 5, background: agendaFilter===f.k ? M.color : C.muted, color: C.bg, borderRadius: 20, padding: "0 5px", fontSize: 8, fontWeight: 700 }}>{f.count}</span>}
-            </button>
-          ))}
-        </div>
-
-        {/* Summary bar today */}
-        {totalTodayCount > 0 && (
-          <div style={{ ...$.card, padding: "10px 14px", marginBottom: 12, borderColor: M.color+"30" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-              <span style={{ fontSize: 10, color: C.muted, letterSpacing: 2 }}>RESUMEN DE HOY</span>
-              <span style={{ color: M.color, fontFamily: "'Bebas Neue', cursive", fontSize: 18 }}>{doneTodayCount}/{totalTodayCount}</span>
-            </div>
-            <div style={{ height: 3, background: C.border, borderRadius: 2, overflow: "hidden" }}>
-              <div style={{ height: "100%", width: `${totalTodayCount ? doneTodayCount/totalTodayCount*100 : 0}%`, background: M.color, borderRadius: 2, transition: "width 0.4s" }} />
-            </div>
-            <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-              {Object.entries(EVENT_TYPES).map(([k, et]) => {
-                const cnt = todayEvents.filter(e => e.type === k).length;
-                if (!cnt) return null;
-                return <span key={k} style={$.bdg(et.color)}>{et.emoji} {cnt}</span>;
-              })}
-            </div>
           </div>
-        )}
+        );
+      }
 
-        {/* View toggle */}
-        <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
-          <button style={{ ...$.btn(agendaView==="week" ? M.color : C.muted, true) }} onClick={() => setAgendaView("week")}>📅 Semana</button>
-          <button style={{ ...$.btn(agendaView==="list" ? M.color : C.muted, true) }} onClick={() => setAgendaView("list")}>☰ Lista</button>
-        </div>
-
-        {/* WEEK VIEW */}
-        {agendaView === "week" && (
+      /* ═══════════════════ DASHBOARD ═══════════════════ */
+      function Dashboard() {
+        const [showFinance, setShowFinance] = useState(false);
+        const FILTERS = [
+          { key: "all", label: "📋 Todo" }, { key: "meeting", label: "🤝 Reuniones" },
+          { key: "call", label: "📞 Llamadas" }, { key: "task", label: "✅ Pendientes" },
+          { key: "personal", label: "🌟 Personal" }, { key: "projects", label: "🗂 Proyectos" },
+        ];
+        return (
           <div>
-            {/* Week navigation */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-              <button style={$.btn(C.muted, true)} onClick={() => setWeekOffset(p => p-1)}>‹ Anterior</button>
-              <span style={{ fontSize: 11, color: C.muted }}>
-                {fmtDate(weekDays[0])} – {fmtDate(weekDays[6])}
-              </span>
-              <button style={$.btn(C.muted, true)} onClick={() => setWeekOffset(p => p+1)}>Siguiente ›</button>
-            </div>
-
-            {/* Day pills */}
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(7,1fr)", gap: 4, marginBottom: 14 }}>
-              {weekDays.map(day => {
-                const isToday   = day === todayStr();
-                const isSel     = day === selectedDay;
-                const cnt = events.filter(e => e.date === day && (agendaFilter==="all"||e.type===agendaFilter)).length;
-                const doneCnt = events.filter(e => e.date === day && e.status === "done" && (agendaFilter==="all"||e.type===agendaFilter)).length;
-                const hasPending = cnt > doneCnt;
-                return (
-                  <button key={day} onClick={() => setSelectedDay(day)}
-                    style={{ background: isSel ? M.color+"25" : isToday ? C.border : "transparent", border: `1px solid ${isSel ? M.color : isToday ? M.color+"40" : C.border}`, borderRadius: 8, padding: "6px 2px", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                    <span style={{ fontSize: 8, color: isToday ? M.color : C.muted, textTransform: "uppercase", letterSpacing: 0.5 }}>{fmtDay(day).replace(".","")}</span>
-                    <span style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 17, color: isSel ? M.color : isToday ? M.color+"aa" : C.text }}>
-                      {new Date(day+"T12:00:00").getDate()}
-                    </span>
-                    {cnt > 0 && (
-                      <div style={{ width: 6, height: 6, borderRadius: "50%", background: hasPending ? M.color : C.green }} />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Selected day events */}
-            <div style={$.card}>
-              <div style={{ fontSize: 10, color: C.muted, letterSpacing: 2, marginBottom: 10, fontWeight: 700, display: "flex", justifyContent: "space-between" }}>
-                <span>{selectedDay === todayStr() ? "HOY — " : ""}{fmtDate(selectedDay).toUpperCase()}</span>
-                <button style={{ ...$.btn(M.color, true), padding: "3px 8px", fontSize: 9 }}
-                  onClick={() => { setNewEvent(p => ({...p, date: selectedDay})); setModal("event"); }}>+ AGREGAR</button>
-              </div>
-              {selectedFiltered.length === 0
-                ? <div style={{ color: C.muted, fontSize: 11, textAlign: "center", padding: "16px 0" }}>Sin eventos este día</div>
-                : selectedFiltered.map(ev => <EventCard key={ev.id} ev={ev} />)
-              }
-            </div>
-          </div>
-        )}
-
-        {/* LIST VIEW */}
-        {agendaView === "list" && (
-          <div>
-            {Object.keys(grouped).length === 0
-              ? <div style={{ ...$.card, textAlign: "center", padding: "24px", color: C.muted, fontSize: 12 }}>
-                  Sin eventos. Agrega uno con el botón o díselo a NEXUS.
+            {/* Stats */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 12 }}>
+              {[
+                { n: overdueTasks.length, l: "VENCIDAS", c: C.red },
+                { n: pendingTasks.length, l: "TAREAS", c: C.yellow },
+                { n: pendingTodayEvents.length, l: "EVENTOS", c: C.blue },
+                { n: doneTasks.length, l: "HECHAS", c: C.green },
+              ].map((x, i) => (
+                <div key={i} style={{ ...s.card, padding: 10, textAlign: "center" }}>
+                  <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 28, color: x.c, letterSpacing: 2 }}>{x.n}</div>
+                  <div style={{ fontSize: 9, color: C.muted, fontWeight: 600, letterSpacing: 1 }}>{x.l}</div>
                 </div>
-              : Object.entries(grouped).sort((a,b) => a[0].localeCompare(b[0])).map(([date, evs]) => {
-                  const isToday = date === todayStr();
-                  const isPast  = date < todayStr();
-                  const pendingCnt = evs.filter(e => e.status !== "done").length;
-                  return (
-                    <div key={date} style={{ ...$.card, borderColor: isToday ? M.color+"40" : C.border, opacity: isPast && pendingCnt===0 ? 0.5 : 1 }}>
-                      <div style={{ fontSize: 10, letterSpacing: 2, marginBottom: 8, fontWeight: 700, color: isToday ? M.color : isPast ? C.red : C.muted, display: "flex", justifyContent: "space-between" }}>
-                        <span>{isToday ? "⚡ HOY — " : isPast ? "⚠️ PASADO — " : ""}{new Date(date+"T12:00:00").toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"short"}).toUpperCase()}</span>
-                        <span>{evs.filter(e=>e.status==="done").length}/{evs.length}</span>
-                      </div>
-                      {evs.map(ev => <EventCard key={ev.id} ev={ev} />)}
-                    </div>
-                  );
-                })
-            }
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  // ── REMINDER PICKER COMPONENT ───────────────────────────────────────────
-  const ReminderPicker = ({ value, onChange, label = "Recordatorios" }) => {
-    const selected = value || [0];
-    const toggle = (v) => {
-      if (selected.includes(v)) onChange(selected.filter(x => x !== v));
-      else onChange([...selected, v].sort((a,b)=>b-a));
-    };
-    return (
-      <div style={$.fg}>
-        <label style={$.lbl}>{label}</label>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-          {REMINDER_OPTIONS.map(opt => (
-            <button key={opt.value}
-              style={{ ...$.btn(selected.includes(opt.value) ? M.color : C.muted, true), padding: "5px 9px" }}
-              onClick={() => toggle(opt.value)}>
-              {selected.includes(opt.value) ? "✓ " : ""}{opt.label}
-            </button>
-          ))}
-        </div>
-        <div style={{ fontSize: 10, color: C.muted, marginTop: 5 }}>
-          ✓ = activo · Puedes seleccionar varios · NEXUS te preguntará 15 min después si lo cumpliste
-        </div>
-      </div>
-    );
-  };
-
-  // ════════════════════════════════════════════════════════════════════════
-  // OTHER SECTIONS
-  // ════════════════════════════════════════════════════════════════════════
-
-  const ModeSelector = () => (
-    <div style={{ ...$.overlay, zIndex: 400 }}>
-      <div style={{ ...$.modal, borderRadius: 0, maxHeight: "100vh" }}>
-        <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 28, textAlign: "center", marginBottom: 6, letterSpacing: 4, background: "linear-gradient(135deg, #a78bfa, #f97316)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>¿CÓMO OPERAS HOY?</div>
-        <p style={{ fontSize: 13, color: "#475569", textAlign: "center", marginBottom: 20, fontFamily: "'Outfit', sans-serif" }}>Elige la personalidad de NEXUS para este día</p>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-          {Object.entries(MODES).map(([k, m]) => (
-            <button key={k} style={{ ...$.btn(m.color), padding: "16px 10px", display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}
-              onClick={async () => { setMode(k); persist("nx3_mode", k); persist("nx3_modeday", todayStr()); setShowModeSelect(false); setTimeout(() => speak(`Modo ${m.name} activado.`), 400); }}>
-              <span style={{ fontSize: 26 }}>{m.emoji}</span>
-              <span style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 16, letterSpacing: 2 }}>{m.name}</span>
-            </button>
-          ))}
-        </div>
-        <div style={{ height: 12 }} />
-      </div>
-    </div>
-  );
-
-  const ReminderOverlay = () => {
-    // Follow-up check (15 min after)
-    if (followUpTarget) {
-      const t = followUpTarget;
-      const ET = EVENT_TYPES[t.type] || EVENT_TYPES.meeting;
-      return (
-        <div style={{ ...$.overlay, zIndex: 500, background: "rgba(0,0,0,0.85)" }}>
-          <div style={{ ...$.modal, borderTop: `3px solid ${C.yellow}`, padding: 24 }}>
-            <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 22, color: C.yellow, textAlign: "center", marginBottom: 4, letterSpacing: 3 }}>
-              ❓ ¿LO CUMPLISTE?
+              ))}
             </div>
-            <div style={{ fontSize: 11, color: C.muted, textAlign: "center", marginBottom: 16 }}>Han pasado 15 minutos</div>
-            <div style={{ ...$.card, borderColor: C.yellow+"50", background: C.yellow+"08", marginBottom: 16 }}>
-              <div style={{ fontSize: 14, fontWeight: 700 }}>{t.isRoutineFollowUp ? "⭐" : ET.emoji} {t.title}</div>
-              {t.time && <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>Programado a las {t.time}</div>}
-            </div>
-            <div style={{ display: "flex", gap: 10, marginBottom: 8 }}>
-              <button style={{ ...$.btn(C.red), flex: 1 }} onClick={() => {
-                speak("Entendido. Te lo recordaré más tarde.");
-                setSnoozed(p => ({...p, [t.id]: Date.now()+30*60*1000}));
-                setFollowUpTarget(null);
-              }}>❌ NO AÚN</button>
-              <button style={{ ...$.btnS(C.green), flex: 2 }} onClick={() => {
-                if (t.isRoutineFollowUp) saveRLog(p => ({...p, [todayStr()]: {...(routineLog[todayStr()]||{}), [t.id]: true}}));
-                else saveEvents(prev => prev.map(e => e.id===t.id ? {...e, status:"done"} : e));
-                speak("¡Excelente! Registrado. Sigue así.");
-                setFollowUpTarget(null);
-              }}>✅ SÍ, LISTO</button>
-            </div>
-            <button style={{ ...$.btn(C.muted, true), width: "100%", textAlign: "center", display: "block" }}
-              onClick={() => { setSnoozed(p => ({...p, [t.id]: Date.now()+2*3600*1000})); setFollowUpTarget(null); }}>
-              Recordarme en 2 horas
-            </button>
-          </div>
-        </div>
-      );
-    }
 
-    if (!reminderTask) return null;
-    const t = reminderTask;
-    const isExact = t.isExactTime;
-    const isRoutineAlert = t.isRoutine;
-    const ET = (!isRoutineAlert && t.type) ? (EVENT_TYPES[t.type] || EVENT_TYPES.meeting) : null;
-    const accentColor = isExact ? M.color : C.red;
-    return (
-      <div style={{ ...$.overlay, zIndex: 500, background: `${accentColor}12` }}>
-        <div style={{ ...$.modal, borderTop: `3px solid ${accentColor}`, padding: 24 }}>
-          <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 22, color: accentColor, textAlign: "center", marginBottom: 4, letterSpacing: 3 }}>
-            {isRoutineAlert ? (t.isAdvance ? "⭐ RECORDATORIO RUTINA" : "⭐ HORA DE TU RUTINA") : t.isAdvance ? `${ET?.emoji || "📅"} RECORDATORIO PREVIO` : isExact ? `${ET?.emoji || "📅"} ES HORA AHORA` : "⚠️ PENDIENTE SIN RESOLVER"}
-          </div>
-          <div style={{ ...$.card, borderColor: accentColor+"50", background: accentColor+"08", marginBottom: 16 }}>
-            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>{t.title}</div>
-            {t.time && <div style={{ fontSize: 13, color: accentColor }}>🕐 {t.time}</div>}
-            {t.company && <div style={{ fontSize: 11, color: C.muted }}>{t.company}</div>}
-            {!isExact && !isRoutineAlert && t.dueDate && <div style={{ fontSize: 11, color: C.red, marginTop: 4 }}>Vencida hace {Math.abs(daysUntil(t.dueDate))}d</div>}
-            {t.isAdvance && <div style={{ fontSize: 12, color: accentColor, marginTop: 4, fontWeight: 700 }}>📣 EN {t.minBefore < 60 ? t.minBefore + " MINUTOS" : (t.minBefore/60 === 1 ? "1 HORA" : t.minBefore/60 + " HORAS")}</div>}
-            {isExact && <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>Te preguntaré en 15 min si lo cumpliste</div>}
-          </div>
-          <div style={{ display: "flex", gap: 10, marginBottom: 8 }}>
-            <button style={{ ...$.btn(C.muted), flex: 1 }} onClick={() => { setSnoozed(p => ({...p, [t.id]: Date.now()+30*60*1000})); setReminderTask(null); }}>⏰ 30 min</button>
-            <button style={{ ...$.btnS(C.green), flex: 2 }} onClick={() => {
-              if (isRoutineAlert) saveRLog(p => ({...p, [todayStr()]: {...(routineLog[todayStr()]||{}), [t.id]: true}}));
-              else if (t.type) saveEvents(prev => prev.map(e => e.id===t.id ? {...e, status:"done"} : e));
-              else saveTasks(prev => prev.map(x => x.id===t.id ? {...x, status:"done", completedAt:todayStr()} : x));
-              setReminderTask(null); speak("¡Perfecto! Marcado como completado.");
-            }}>✅ {isRoutineAlert ? "YA LO HICE" : isExact ? "ENTENDIDO" : "YA LO HICE"}</button>
-          </div>
-          <button style={{ ...$.btn(C.muted, true), width: "100%", textAlign: "center", display: "block" }} onClick={() => { setSnoozed(p => ({...p, [t.id]: Date.now()+2*3600*1000})); setReminderTask(null); }}>Ignorar 2 horas</button>
-        </div>
-      </div>
-    );
-  };
-
-  const Dashboard = () => {
-    return (
-    <div>
-      <div style={$.sHd}>
-        <span>HOY</span>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button style={$.btn(M.color, true)} onClick={() => setShowModeSelect(true)}>{M.emoji} {M.name}</button>
-          {notifPerm !== "granted" && <button style={$.btn(C.yellow, true)} onClick={requestNotif}>🔔</button>}
-        </div>
-      </div>
-      <div style={{ fontSize: 10, color: C.muted, marginBottom: 12 }}>{new Date().toLocaleDateString("es-MX",{weekday:"long",day:"numeric",month:"long",year:"numeric"}).toUpperCase()}</div>
-
-      {/* Stats row */}
-      <div style={{ ...$.card, padding: 0, overflow: "hidden", marginBottom: 12 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", textAlign: "center" }}>
-          {[
-            { n: overdueTasks.length,   l: "VENCIDAS", c: overdueTasks.length > 0 ? C.red : C.muted },
-            { n: todayTasks.length,     l: "TAREAS",   c: todayTasks.length > 0 ? C.yellow : C.muted },
-            { n: todayEvents.filter(e=>e.status!=="done").length, l: "EVENTOS", c: todayEvents.length > 0 ? M.color : C.muted },
-            { n: doneTasks.length,      l: "HECHAS",   c: C.green },
-          ].map((s,i) => (
-            <div key={i} style={{ padding: "12px 4px", borderRight: i<3 ? `1px solid ${C.border}` : "none" }}>
-              <div style={{ ...$.statN, fontSize: 30, color: s.c }}>{s.n}</div>
-              <div style={$.statL}>{s.l}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Routine */}
-      {routine.length > 0 && (
-        <div style={$.card}>
-          <div style={{ fontSize: 10, color: C.muted, letterSpacing: 2, marginBottom: 8, fontWeight: 700, display: "flex", justifyContent: "space-between" }}>
-            <span>RUTINA</span><span style={{ color: M.color }}>{routineDone}/{routine.length}</span>
-          </div>
-          <div style={{ height: 3, background: C.border, borderRadius: 2, marginBottom: 10, overflow: "hidden" }}>
-            <div style={{ height: "100%", width: `${routine.length ? routineDone/routine.length*100 : 0}%`, background: M.color, borderRadius: 2, transition: "width 0.4s" }} />
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {routine.map(r => { const done = !!todayRLog[r.id]; return <button key={r.id} style={{ padding: "5px 10px", background: done?C.green+"20":C.border, border: `1px solid ${done?C.green:C.border}`, borderRadius: 20, color: done?C.green:C.muted, fontSize: 11, cursor: "pointer" }} onClick={() => saveRLog(p => ({...p, [todayStr()]: {...todayRLog, [r.id]: !done}}))}>{r.icon} {r.title}</button>; })}
-          </div>
-        </div>
-      )}
-
-      {/* Today's agenda timeline */}
-      {todayEvents.length > 0 && (
-        <div style={$.card}>
-          <div style={{ fontSize: 10, color: C.muted, letterSpacing: 2, marginBottom: 10, fontWeight: 700, display: "flex", justifyContent: "space-between" }}>
-            <span>AGENDA HOY</span>
-            <span style={{ color: M.color }}>{todayEvents.filter(e=>e.status==="done").length}/{todayEvents.length}</span>
-          </div>
-          {todayEvents.map(ev => <EventCard key={ev.id} ev={ev} />)}
-          <button style={{ ...$.btn(M.color, true), marginTop: 8, width: "100%", textAlign: "center", display: "block" }} onClick={() => setTab("agenda")}>VER AGENDA COMPLETA →</button>
-        </div>
-      )}
-
-      {/* ── UNIFIED FILTER VIEW ── */}
-      <div style={{ marginBottom: 14 }}>
-        {/* Filter pills */}
-        <div style={{ overflowX: "auto", display: "flex", gap: 6, paddingBottom: 4, marginBottom: 14 }}>
-          {[
-            { k: "all",      label: "📋 Todo",       count: pendingTasks.length + pendingEvents.length },
-            { k: "meeting",  label: "🤝 Reuniones",  count: events.filter(e=>e.type==="meeting"&&e.status!=="done").length },
-            { k: "call",     label: "📞 Llamadas",   count: events.filter(e=>e.type==="call"&&e.status!=="done").length },
-            { k: "task",     label: "✅ Pendientes", count: pendingTasks.length },
-            { k: "personal", label: "🌟 Personal",   count: events.filter(e=>e.type==="personal"&&e.status!=="done").length },
-            { k: "projects", label: "🗂 Proyectos",  count: projects.length },
-          ].map(f => (
-            <button key={f.k}
-              style={{
-                ...$.btn(unifiedFilter === f.k ? M.color : "#334155", true),
-                flexShrink: 0, padding: "7px 13px", fontSize: 11,
-                background: unifiedFilter === f.k ? M.color+"20" : "rgba(255,255,255,0.03)",
-                borderColor: unifiedFilter === f.k ? M.color+"60" : "#1e293b",
-                fontFamily: "'Outfit', sans-serif",
-              }}
-              onClick={() => setUnifiedFilter(f.k)}>
-              {f.label}
-              {f.count > 0 && (
-                <span style={{ marginLeft: 6, background: unifiedFilter===f.k ? M.color : "#334155", color: unifiedFilter===f.k ? "#000" : "#94a3b8", borderRadius: 20, padding: "1px 6px", fontSize: 9, fontWeight: 700 }}>
-                  {f.count}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-
-        {/* PROJECTS VIEW */}
-        {unifiedFilter === "projects" && (
-          <div>
-            {projects.length === 0 ? (
-              <div style={{ ...$.card, textAlign: "center", padding: "24px", color: "#475569", fontSize: 12 }}>
-                Sin proyectos. Dile a NEXUS en qué trabajas.
-              </div>
-            ) : projects.map(proj => {
-              const pt = tasks.filter(t => t.project === proj.name || t.company === proj.company);
-              const donePt = pt.filter(t => t.status === "done").length;
-              const pendPt = pt.filter(t => t.status !== "done");
-              const overduePt = pendPt.filter(t => t.dueDate < todayStr());
-              const pct = pt.length ? Math.round(donePt / pt.length * 100) : 0;
-              return (
-                <div key={proj.id} style={{ ...$.card, borderLeft: `3px solid ${proj.color}`, marginBottom: 10 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: 14, fontFamily: "'Outfit', sans-serif" }}>{proj.name}</div>
-                      <div style={{ fontSize: 11, color: "#475569", marginTop: 2 }}>{proj.company}</div>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 28, color: proj.color, lineHeight: 1 }}>{donePt}/{pt.length}</div>
-                      {overduePt.length > 0 && <div style={{ fontSize: 9, color: "#f43f5e", fontWeight: 700 }}>⚠️ {overduePt.length} VENCIDAS</div>}
-                    </div>
-                  </div>
-                  <div style={{ height: 3, background: "#0f172a", borderRadius: 2, overflow: "hidden", marginBottom: pendPt.length ? 10 : 0 }}>
-                    <div style={{ height: "100%", width: `${pct}%`, background: `linear-gradient(90deg, ${proj.color}, ${proj.color}aa)`, borderRadius: 2, transition: "width 0.5s" }} />
-                  </div>
-                  {pendPt.slice(0, 5).map(t => {
-                    const od = t.dueDate < todayStr();
-                    return (
-                      <div key={t.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: `1px solid #0f172a` }}>
-                        <div style={{ display: "flex", gap: 8, alignItems: "center", minWidth: 0, flex: 1 }}>
-                          <div style={$.chk(false)} onClick={() => saveTasks(p => p.map(x => x.id===t.id ? {...x, status:"done", completedAt:todayStr()} : x))}>
-                            <span style={{ color: "#1e293b", fontSize: 10 }}>○</span>
-                          </div>
-                          <span style={{ fontSize: 12, color: od ? "#f43f5e" : C.text, fontFamily: "'Outfit', sans-serif" }}>{t.title}</span>
-                        </div>
-                        <span style={{ fontSize: 10, color: od ? "#f43f5e" : "#475569", flexShrink: 0, marginLeft: 8 }}>
-                          {od ? `⚠️ ${Math.abs(daysUntil(t.dueDate))}d` : fmtDate(t.dueDate)}
-                        </span>
-                      </div>
-                    );
+            {/* Routine bar */}
+            {routine.length > 0 && (
+              <div style={{ ...s.card, padding: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: C.muted, letterSpacing: 1 }}>RUTINA</span>
+                  <span style={{ fontSize: 11, color: C.green }}>{todayRoutineDone}/{routine.length}</span>
+                </div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {routine.map(h => {
+                    const done = routineLog[today]?.[h.id];
+                    return <button key={h.id} onClick={() => toggleRoutineItem(h.id)} style={{ background: done ? C.green + "22" : C.card2, border: `1px solid ${done ? C.green : C.border}`, borderRadius: 20, padding: "4px 10px", fontSize: 12, color: done ? C.green : C.muted, cursor: "pointer" }}>{h.icon} {h.title}</button>;
                   })}
-                  {pendPt.length > 5 && <div style={{ fontSize: 10, color: "#475569", marginTop: 6, textAlign: "right" }}>+{pendPt.length - 5} más pendientes</div>}
-                  {pt.length === 0 && <div style={{ fontSize: 11, color: "#334155", textAlign: "center", padding: "8px 0" }}>Sin tareas en este proyecto</div>}
                 </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* UNIFIED ITEMS VIEW */}
-        {unifiedFilter !== "projects" && (
-          unifiedItems.length === 0
-            ? <div style={{ ...$.card, textAlign: "center", padding: "24px", color: "#475569", fontSize: 12 }}>✨ Sin pendientes en esta categoría</div>
-            : <div style={$.card}>
-                {unifiedItems.map(item => {
-                  if (item._kind === "task") {
-                    const od = item.dueDate < todayStr();
-                    return (
-                      <div key={item.id} style={{ display: "flex", gap: 10, padding: "10px 0", borderBottom: "1px solid #0f172a", alignItems: "flex-start" }}>
-                        <div style={$.chk(false)} onClick={() => saveTasks(p => p.map(x => x.id===item.id ? {...x, status:"done", completedAt:todayStr()} : x))}>
-                          <span style={{ color: "#1e293b", fontSize: 10 }}>○</span>
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontFamily: "'Outfit', sans-serif", fontWeight: 500 }}>{item.title}</div>
-                          <div style={{ display: "flex", gap: 5, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}>
-                            <span style={$.bdg("#fb923c")}>✅ Tarea</span>
-                            {(item.company || item.project) && <span style={$.bdg(M.color)}>{item.company || item.project}</span>}
-                            <span style={{ fontSize: 10, color: od ? "#f43f5e" : "#475569" }}>{od ? "⚠️ vencida " + fmtDate(item.dueDate) : fmtDate(item.dueDate)}</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  } else {
-                    const ET2 = EVENT_TYPES[item.type] || EVENT_TYPES.meeting;
-                    const isPast = item.date < todayStr();
-                    return (
-                      <div key={item.id} style={{ display: "flex", gap: 10, padding: "10px 0", borderBottom: "1px solid #0f172a", alignItems: "flex-start" }}>
-                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, flexShrink: 0 }}>
-                          <div style={{ ...$.chk(false), borderColor: ET2.color+"60" }} onClick={() => saveEvents(p => p.map(e => e.id===item.id ? {...e, status:"done"} : e))}>
-                            <span style={{ color: "#1e293b", fontSize: 10 }}>○</span>
-                          </div>
-                          <span style={{ fontSize: 13 }}>{ET2.emoji}</span>
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontFamily: "'Outfit', sans-serif", fontWeight: 500 }}>{item.title}</div>
-                          <div style={{ display: "flex", gap: 5, marginTop: 4, flexWrap: "wrap", alignItems: "center" }}>
-                            <span style={$.bdg(ET2.color)}>{ET2.label}</span>
-                            {item.time && <span style={{ color: ET2.color, fontSize: 11, fontWeight: 700 }}>🕐 {item.time}</span>}
-                            {item.company && <span style={$.bdg(M.color)}>{item.company}</span>}
-                            <span style={{ fontSize: 10, color: isPast ? "#f43f5e" : "#475569" }}>{isPast ? "⚠️ " + fmtDate(item.date) : item.date === todayStr() ? "HOY" : fmtDate(item.date)}</span>
-                          </div>
-                          {item.contact && <div style={{ fontSize: 10, color: "#475569", marginTop: 2 }}>👤 {item.contact}</div>}
-                        </div>
-                      </div>
-                    );
-                  }
-                })}
-              </div>
-        )}
-      </div>
-
-      {/* Overdue tasks */}
-      {overdueTasks.length > 0 && (
-        <div style={{ ...$.card, borderColor: C.red+"50", background: C.red+"06" }}>
-          <div style={{ color: C.red, fontSize: 10, letterSpacing: 2, marginBottom: 10, fontWeight: 700 }}>⚠️ VENCIDAS — ACCIÓN INMEDIATA</div>
-          {overdueTasks.slice(0,4).map(t => (
-            <div key={t.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: `1px solid ${C.border}` }}>
-              <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 12 }}>{t.title}</div><div style={{ fontSize: 10, color: C.muted }}>{t.company||t.project||"General"}</div></div>
-              <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
-                <span style={{ color: C.red, fontSize: 10 }}>−{Math.abs(daysUntil(t.dueDate))}d</span>
-                <button style={$.btn(C.green, true)} onClick={() => saveTasks(prev => prev.map(x => x.id===t.id ? {...x, status:"done", completedAt:todayStr()} : x))}>✓</button>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Today tasks */}
-      {todayTasks.length > 0 && (
-        <div style={$.card}>
-          <div style={{ fontSize: 10, color: C.muted, letterSpacing: 2, marginBottom: 10, fontWeight: 700 }}>TAREAS DE HOY</div>
-          {todayTasks.map(t => (
-            <div key={t.id} style={$.row}>
-              <div style={$.chk(false)} onClick={() => saveTasks(prev => prev.map(x => x.id===t.id ? {...x, status:"done", completedAt:todayStr()} : x))}><span style={{ color: C.muted, fontSize: 10 }}>○</span></div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13 }}>{t.title}</div>
-                <div style={{ display: "flex", gap: 5, marginTop: 4, flexWrap: "wrap" }}>
-                  {(t.company||t.project) && <span style={$.bdg(M.color)}>{t.company||t.project}</span>}
-                  <span style={$.bdg(priColor(t.priority))}>{t.priority}</span>
+                <div style={{ marginTop: 8, height: 4, background: C.card2, borderRadius: 4, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${routine.length ? (todayRoutineDone / routine.length) * 100 : 0}%`, background: C.grad, borderRadius: 4, transition: "width 0.3s" }} />
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            )}
 
-      {/* Urgent payments */}
-      {urgentPays.length > 0 && (
-        <div style={$.card}>
-          <div style={{ fontSize: 10, color: C.muted, letterSpacing: 2, marginBottom: 10, fontWeight: 700 }}>💰 PAGOS PRÓXIMOS</div>
-          {urgentPays.map(p => { const d = daysUntil(p.nextDue); return (
-            <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
-              <div><div style={{ fontSize: 13 }}>{p.name}</div><div style={{ fontSize: 10, color: C.muted }}>{p.company}</div></div>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 18, color: d<=1?C.red:C.yellow }}>${p.amount.toLocaleString()}</div>
-                <div style={{ fontSize: 10, color: d<=1?C.red:C.muted }}>{d===0?"⚡ HOY":d===1?"mañana":`en ${d}d`}</div>
+            {/* Today events timeline */}
+            {todayEvents.length > 0 && (
+              <div style={{ ...s.card }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, letterSpacing: 1, marginBottom: 8 }}>AGENDA DE HOY</div>
+                {todayEvents.map(ev => (
+                  <div key={ev.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 0", borderBottom: `1px solid ${C.border}`, opacity: ev.status === "done" ? 0.5 : 1 }}>
+                    <button onClick={() => toggleEvent(ev.id)} style={{ width: 20, height: 20, borderRadius: 6, border: `2px solid ${ev.status === "done" ? C.green : C.muted}`, background: ev.status === "done" ? C.green : "transparent", cursor: "pointer", flexShrink: 0, fontSize: 10, color: "#fff" }}>{ev.status === "done" ? "✓" : ""}</button>
+                    <span style={{ fontSize: 12, color: C.muted, fontWeight: 600, width: 42, flexShrink: 0 }}>{ev.time || "--:--"}</span>
+                    <span style={{ fontSize: 12, color: (EVENT_TYPES[ev.type] || {}).color || C.muted, marginRight: 4 }}>{(EVENT_TYPES[ev.type] || {}).emoji}</span>
+                    <span style={{ fontSize: 13, flex: 1, textDecoration: ev.status === "done" ? "line-through" : "none" }}>{ev.title}</span>
+                  </div>
+                ))}
               </div>
+            )}
+
+            {/* Unified filters */}
+            <div style={{ display: "flex", gap: 6, overflowX: "auto", marginBottom: 10, paddingBottom: 4 }}>
+              {FILTERS.map(f => (
+                <button key={f.key} onClick={() => setUnifiedFilter(f.key)} style={{ background: unifiedFilter === f.key ? C.purple + "33" : C.card, border: `1px solid ${unifiedFilter === f.key ? C.purple : C.border}`, borderRadius: 20, padding: "5px 12px", fontSize: 11, color: unifiedFilter === f.key ? C.teal : C.muted, cursor: "pointer", whiteSpace: "nowrap", fontWeight: 600 }}>{f.label}</button>
+              ))}
             </div>
-          );})}
-        </div>
-      )}
 
-      {/* Finance summary - hidden by default */}
-      <div style={$.card}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: showFinance ? 14 : 0 }}>
-          <div style={{ fontSize: 10, color: "#475569", letterSpacing: 2, fontWeight: 700, fontFamily: "'Outfit', sans-serif" }}>💰 FINANZAS DEL MES</div>
-          <button style={{ ...$.btn(M.color, true), padding: "4px 10px", fontSize: 10 }}
-            onClick={() => setShowFinance(p => !p)}>
-            {showFinance ? "🙈 OCULTAR" : "👁 VER"}
-          </button>
-        </div>
-        {showFinance && (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", textAlign: "center", paddingTop: 4 }}>
-            <div><div style={{ ...$.statN, fontSize: 22, color: "#34d399" }}>${mIncome.toLocaleString()}</div><div style={$.statL}>INGRESOS</div></div>
-            <div style={{ borderLeft: `1px solid ${C.border}`, borderRight: `1px solid ${C.border}` }}><div style={{ ...$.statN, fontSize: 22, color: "#f43f5e" }}>${mExp.toLocaleString()}</div><div style={$.statL}>GASTOS</div></div>
-            <div><div style={{ ...$.statN, fontSize: 22, color: mIncome-mExp>=0?"#a78bfa":"#f43f5e" }}>${(mIncome-mExp).toLocaleString()}</div><div style={$.statL}>NETO</div></div>
-          </div>
-        )}
-      </div>
-
-      {tasks.length === 0 && events.length === 0 && (
-        <div style={{ ...$.card, textAlign: "center", padding: "30px 16px" }}>
-          <div style={{ fontSize: 28, marginBottom: 10 }}>🚀</div>
-          <div style={{ color: C.muted, fontSize: 12, lineHeight: 1.9 }}>Sistema listo. Ve al chat y vacía tu mente.<br />El caos termina hoy.</div>
-          <button style={{ ...$.btn(M.color), marginTop: 14 }} onClick={() => setTab("chat")}>ABRIR CHAT →</button>
-        </div>
-      )}
-    </div>
-  );
-  };
-
-  const Chat = () => (
-    <div style={$.chatWrap}>
-      <div style={{ padding: "8px 12px", borderBottom: `1px solid ${C.border}`, overflowX: "auto", display: "flex", gap: 6, flexShrink: 0, background: "rgba(4,4,10,0.95)", backdropFilter: "blur(20px)" }}>
-        {QUICK.map((q,i) => <button key={i} style={{ ...$.btn(M.color, true), flexShrink: 0 }} onClick={() => sendMsg(q.t)}>{q.l}</button>)}
-      </div>
-      <div ref={chatRef} style={$.chatScroll}>
-        {messages.map(m => (
-          <div key={m.id} style={{ display: "flex", justifyContent: m.role==="user"?"flex-end":"flex-start", marginBottom: 10 }}>
-            <div style={$.bubble(m.role)}>
-              {m.role === "assistant" && (
-                <div style={{ fontSize: 9, color: MODES[m.mode||"ejecutivo"].color, marginBottom: 5, letterSpacing: 1.5 }}>
-                  NEXUS {MODES[m.mode||"ejecutivo"].emoji}
-                  {m.addedItems > 0 && <span style={{ ...$.bdg(C.green), marginLeft: 8 }}>+{m.addedItems}</span>}
-                </div>
-              )}
-              {m.text}
-            </div>
-          </div>
-        ))}
-        {loading && (
-          <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: 10 }}>
-            <div style={$.bubble("assistant")}>
-              <div style={{ fontSize: 9, color: M.color, marginBottom: 5 }}>NEXUS {M.emoji}</div>
-              <span style={{ color: M.color }}>▋</span>
-            </div>
-          </div>
-        )}
-      </div>
-      <div style={$.chatBar}>
-        <button style={{ padding: "9px 12px", background: listening?C.red+"20":"#0a0a1a", border: `1px solid ${listening?C.red:C.border}`, borderRadius: 8, cursor: "pointer", flexShrink: 0, position: "relative" }} onClick={startVoice}>
-          {listening ? "🔴" : "🎙️"}
-          {listening && <span style={{ position: "absolute", inset: -3, borderRadius: 8, border: `2px solid ${C.red}`, animation: "ring 1s infinite", pointerEvents: "none" }} />}
-        </button>
-        <input ref={inputRef} style={{ ...$.inp, flex: 1 }} value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => { if (e.key==="Enter"&&!e.shiftKey) { e.preventDefault(); sendMsg(); } }} placeholder={listening ? "Escuchando... 🎙️" : "Habla o escribe a NEXUS..."} />
-        <button style={{ ...$.btnS(M.color), padding: "9px 14px" }} onClick={() => sendMsg()} disabled={loading}>{loading ? "···" : "→"}</button>
-        <button style={{ padding: "9px 10px", background: ttsEnabled?M.color+"20":"#0a0a1a", border: `1px solid ${ttsEnabled?M.color:C.border}`, borderRadius: 8, cursor: "pointer", fontSize: 14 }} onClick={() => { const n = !ttsEnabled; setTtsEnabled(n); persist("nx3_tts", n); }}>{ttsEnabled ? "🔊" : "🔇"}</button>
-      </div>
-      <style>{`@keyframes ring{0%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.5)}}`}</style>
-    </div>
-  );
-
-  const Tasks = () => {
-    const filtered = tasks.filter(t => taskFilter==="done"?t.status==="done":taskFilter==="all"?true:t.status!=="done");
-    const sorted   = [...filtered].sort((a,b) => { if(a.status!=="done"&&a.dueDate<todayStr()) return -1; if(b.status!=="done"&&b.dueDate<todayStr()) return 1; return new Date(a.dueDate)-new Date(b.dueDate); });
-    return (
-      <div>
-        <div style={$.sHd}><span>TAREAS</span><button style={$.btn(M.color)} onClick={() => setModal("task")}>+ NUEVA</button></div>
-        <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
-          {[["pending",`PENDIENTES (${pendingTasks.length})`],["done",`HECHAS (${doneTasks.length})`],["all","TODAS"]].map(([k,l]) => (
-            <button key={k} style={$.btn(taskFilter===k?M.color:C.muted,true)} onClick={() => setTaskFilter(k)}>{l}</button>
-          ))}
-        </div>
-        <div style={$.card}>
-          {sorted.length === 0 ? <div style={{ color: C.muted, textAlign: "center", padding: "20px 0", fontSize: 12 }}>{taskFilter==="pending" ? "🎉 Sin pendientes" : "Nada aquí"}</div>
-            : sorted.map(t => {
-              const od = t.status!=="done" && t.dueDate < todayStr();
+            {/* Projects view */}
+            {unifiedFilter === "projects" && projects.map(proj => {
+              const pTasks = tasks.filter(t => t.project === proj.name);
+              const pDone = pTasks.filter(t => t.status === "done").length;
+              const pct = pTasks.length ? Math.round((pDone / pTasks.length) * 100) : 0;
               return (
-                <div key={t.id} style={{ ...$.row, opacity: t.status==="done"?0.5:1, borderColor: od?C.red+"30":C.border }}>
-                  <div style={$.chk(t.status==="done")} onClick={() => saveTasks(prev => prev.map(x => x.id===t.id ? {...x, status: x.status==="done"?"pending":"done", completedAt: x.status!=="done"?todayStr():undefined} : x))}>
-                    {t.status==="done" && <span style={{ color: C.green, fontSize: 11, fontWeight: 700 }}>✓</span>}
+                <div key={proj.id} style={s.card}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div><span style={{ fontSize: 13, fontWeight: 600 }}>{proj.name}</span>{proj.company && <span style={{ fontSize: 11, color: C.muted, marginLeft: 8 }}>{proj.company}</span>}</div>
+                    <span style={{ fontSize: 12, color: C.green, fontWeight: 600 }}>{pct}%</span>
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, textDecoration: t.status==="done"?"line-through":"none" }}>{t.title}</div>
-                    {t.notes && <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{t.notes}</div>}
-                    <div style={{ display: "flex", gap: 5, marginTop: 5, flexWrap: "wrap", alignItems: "center" }}>
-                      {(t.company||t.project) && <span style={$.bdg(M.color)}>{t.company||t.project}</span>}
-                      <span style={$.bdg(priColor(t.priority))}>{t.priority}</span>
-                      <span style={{ fontSize: 10, color: od?C.red:C.muted }}>{od?`⚠️ vencida ${fmtDate(t.dueDate)}`:fmtDate(t.dueDate)}</span>
-                    </div>
+                  <div style={{ marginTop: 8, height: 4, background: C.card2, borderRadius: 4, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${pct}%`, background: C.grad, borderRadius: 4, transition: "width 0.3s" }} />
                   </div>
-                  <button style={$.del} onClick={() => saveTasks(prev => prev.filter(x => x.id!==t.id))}>×</button>
                 </div>
               );
             })}
-        </div>
-      </div>
-    );
-  };
 
-  const MoreDrawer = () => (
-    <div style={{ ...$.overlay, zIndex: 200 }} onClick={() => setShowMore(false)}>
-      <div style={{ ...$.modal, maxHeight: "88vh" }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: "flex", gap: 6, marginBottom: 16, overflowX: "auto" }}>
-          {[["projects","🗂 Proyectos"],["finance","💰 Dinero"],["routine","⚡ Rutina"],["contacts","👥 Contactos"]].map(([k,l]) => (
-            <button key={k} style={{ ...$.btn(moreSection===k?M.color:C.muted,true), flex: 1, flexShrink: 0 }} onClick={() => setMoreSection(k)}>{l}</button>
-          ))}
-        </div>
-
-        {moreSection === "projects" && (
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-              <span style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 18, letterSpacing: 3, color: M.color }}>PROYECTOS</span>
-              <button style={$.btn(M.color, true)} onClick={() => { setShowMore(false); setModal("project"); }}>+ NUEVO</button>
-            </div>
-            {projects.length === 0 ? <div style={{ color: C.muted, textAlign: "center", padding: "20px 0", fontSize: 11 }}>Sin proyectos aún.</div> :
-              projects.map(proj => {
-                const pt = tasks.filter(t => t.project===proj.name || t.company===proj.company);
-                const doneP = pt.filter(t => t.status==="done").length;
-                const pct = pt.length ? Math.round(doneP/pt.length*100) : 0;
-                return (
-                  <div key={proj.id} style={{ ...$.card, borderLeft: `3px solid ${proj.color}`, marginBottom: 10 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                      <div><div style={{ fontWeight: 700, fontSize: 13 }}>{proj.name}</div><div style={{ fontSize: 11, color: C.muted }}>{proj.company}</div></div>
-                      <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 24, color: proj.color }}>{doneP}/{pt.length}</div>
-                    </div>
-                    <div style={{ height: 3, background: C.border, borderRadius: 2, overflow: "hidden" }}>
-                      <div style={{ height: "100%", width: `${pct}%`, background: proj.color, borderRadius: 2 }} />
-                    </div>
-                    <button style={{ ...$.del, display: "block", marginLeft: "auto", marginTop: 8, fontSize: 11 }} onClick={() => saveProjs(prev => prev.filter(x => x.id!==proj.id))}>× eliminar</button>
-                  </div>
-                );
-              })}
-          </div>
-        )}
-
-        {moreSection === "finance" && (
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-              <span style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 18, letterSpacing: 3, color: M.color }}>DINERO</span>
-              <div style={{ display: "flex", gap: 6 }}>
-                <button style={$.btn(C.green,true)} onClick={() => { setShowMore(false); setModal("finance"); }}>+ MOVIMIENTO</button>
-                <button style={$.btn(M.color,true)} onClick={() => { setShowMore(false); setModal("payment"); }}>+ PAGO</button>
-              </div>
-            </div>
-            <div style={$.card}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: showFinance ? 14 : 0 }}>
-                <div style={{ fontSize: 10, color: "#475569", letterSpacing: 2, fontWeight: 700 }}>TOTALES DEL MES</div>
-                <button style={{ ...$.btn(M.color, true), padding: "4px 10px" }} onClick={() => setShowFinance(p => !p)}>
-                  {showFinance ? "🙈 OCULTAR" : "👁 VER TOTALES"}
-                </button>
-              </div>
-              {showFinance && (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", textAlign: "center", paddingTop: 4 }}>
-                  <div><div style={{ ...$.statN, fontSize: 22, color: "#34d399" }}>${mIncome.toLocaleString()}</div><div style={$.statL}>INGRESOS</div></div>
-                  <div style={{ borderLeft: `1px solid ${C.border}`, borderRight: `1px solid ${C.border}` }}><div style={{ ...$.statN, fontSize: 22, color: "#f43f5e" }}>${mExp.toLocaleString()}</div><div style={$.statL}>GASTOS</div></div>
-                  <div><div style={{ ...$.statN, fontSize: 22, color: mIncome-mExp>=0?"#a78bfa":"#f43f5e" }}>${(mIncome-mExp).toLocaleString()}</div><div style={$.statL}>NETO</div></div>
-                </div>
-              )}
-            </div>
-            <div style={$.card}>
-              <div style={{ fontSize: 10, color: C.muted, letterSpacing: 2, marginBottom: 8, fontWeight: 700 }}>PAGOS RECURRENTES</div>
-              {payments.length === 0 ? <div style={{ color: C.muted, fontSize: 11, textAlign: "center", padding: "12px 0" }}>Sin pagos</div> :
-                [...payments].sort((a,b) => new Date(a.nextDue)-new Date(b.nextDue)).map(pay => {
-                  const d = daysUntil(pay.nextDue);
-                  const col = d<0?C.red:d<=3?C.yellow:C.green;
-                  return (
-                    <div key={pay.id} style={$.row}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13 }}>{pay.name}</div>
-                        <div style={{ display: "flex", gap: 5, marginTop: 4 }}>
-                          <span style={$.bdg(C.purple)}>{pay.company}</span>
-                          <span style={{ fontSize: 10, color: col }}>{d<0?`venc. ${Math.abs(d)}d`:d===0?"⚡ HOY":d===1?"mañana":`en ${d}d`}</span>
-                        </div>
+            {/* Unified items */}
+            {unifiedFilter !== "projects" && unifiedItems.map(item => {
+              const isTask = item._kind === "task";
+              const dateStr = item.dueDate || item.date || "";
+              const isOverdue = dateStr && dateStr < today && (isTask ? item.status !== "done" : item.status !== "done");
+              const days = isOverdue ? daysDiff(today, dateStr) : 0;
+              return (
+                <div key={item.id} style={{ ...s.card, borderLeft: `3px solid ${isOverdue ? C.red : isTask ? (item.priority === "high" ? C.red : item.priority === "low" ? C.blue : C.yellow) : (EVENT_TYPES[item.type] || {}).color || C.muted}`, padding: 12 }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
+                    <button onClick={() => isTask ? toggleTask(item.id) : toggleEvent(item.id)} style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${item.status === "done" ? C.green : C.muted}`, background: item.status === "done" ? C.green : "transparent", cursor: "pointer", flexShrink: 0, fontSize: 11, color: "#fff", marginTop: 1 }}>{item.status === "done" ? "✓" : ""}</button>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, textDecoration: item.status === "done" ? "line-through" : "none", opacity: item.status === "done" ? 0.5 : 1 }}>{item.title}</div>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
+                        {isTask && <span style={s.tag(item.priority === "high" ? C.red : item.priority === "low" ? C.blue : C.yellow)}>{item.priority === "high" ? "ALTA" : item.priority === "low" ? "BAJA" : "MEDIA"}</span>}
+                        {!isTask && <span style={s.tag((EVENT_TYPES[item.type] || {}).color || C.muted)}>{(EVENT_TYPES[item.type] || {}).emoji} {(EVENT_TYPES[item.type] || {}).label}</span>}
+                        {dateStr && <span style={{ fontSize: 11, color: isOverdue ? C.red : C.muted }}>{isOverdue ? `⚠️ ${days}d atrás` : fmtDate(dateStr)}</span>}
+                        {item.company && <span style={{ fontSize: 11, color: C.muted }}>🏢 {item.company}</span>}
+                        {item.time && <span style={{ fontSize: 11, color: C.muted }}>🕐 {item.time}</span>}
                       </div>
-                      <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 20, color: col }}>${pay.amount.toLocaleString()}</div>
-                      <button style={$.del} onClick={() => savePays(prev => prev.filter(x => x.id!==pay.id))}>×</button>
                     </div>
-                  );
-                })}
-            </div>
-            {finance.length > 0 && (
-              <div style={$.card}>
-                <div style={{ fontSize: 10, color: C.muted, letterSpacing: 2, marginBottom: 8, fontWeight: 700 }}>ÚLTIMOS MOVIMIENTOS</div>
-                {[...finance].sort((a,b) => new Date(b.date)-new Date(a.date)).slice(0,8).map(f => (
-                  <div key={f.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "7px 0", borderBottom: `1px solid ${C.border}` }}>
-                    <div><div style={{ fontSize: 12 }}>{f.description||"—"}</div><div style={{ fontSize: 10, color: C.muted }}>{f.company} · {fmtDate(f.date)}</div></div>
-                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                      <span style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 16, color: f.type==="income"?C.green:C.red }}>{f.type==="income"?"+":"-"}${f.amount.toLocaleString()}</span>
-                      <button style={$.del} onClick={() => saveFinance(prev => prev.filter(x => x.id!==f.id))}>×</button>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Upcoming payments */}
+            {upcomingPayments.length > 0 && (
+              <div style={{ ...s.card, borderLeft: `3px solid ${C.orange}` }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: C.orange, letterSpacing: 1, marginBottom: 8 }}>💰 PAGOS PRÓXIMOS</div>
+                {upcomingPayments.map(p => (
+                  <div key={p.id} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: `1px solid ${C.border}` }}>
+                    <span style={{ fontSize: 13 }}>{p.name}</span>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: C.orange }}>${(p.amount || 0).toLocaleString()}</div>
+                      <div style={{ fontSize: 10, color: C.muted }}>{fmtDate(p.nextDue)}</div>
                     </div>
                   </div>
                 ))}
               </div>
             )}
-          </div>
-        )}
 
-        {moreSection === "routine" && (
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-              <span style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 18, letterSpacing: 3, color: M.color }}>RUTINA DIARIA</span>
-              <button style={$.btn(M.color,true)} onClick={() => { setShowMore(false); setModal("habit"); }}>+ HÁBITO</button>
-            </div>
-            <div style={$.card}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-                <div style={{ fontSize: 10, color: C.muted }}>HOY: {routineDone}/{routine.length}</div>
-              </div>
-              <div style={{ height: 4, background: C.border, borderRadius: 2, marginBottom: 12, overflow: "hidden" }}>
-                <div style={{ height: "100%", width: `${routine.length?routineDone/routine.length*100:0}%`, background: M.color, borderRadius: 2 }} />
-              </div>
-              {routine.map(r => { const done = !!todayRLog[r.id]; return (
-                <div key={r.id} style={{ ...$.row, justifyContent: "space-between" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                    <div style={$.chk(done)} onClick={() => saveRLog(p => ({...p, [todayStr()]: {...todayRLog, [r.id]: !done}}))}>{done && <span style={{ color: C.green, fontWeight: 700, fontSize: 11 }}>✓</span>}</div>
-                    <span style={{ fontSize: 13, textDecoration: done?"line-through":"none", color: done?C.muted:C.text }}>{r.icon} {r.title}</span>
-                  </div>
-                  <button style={$.del} onClick={() => saveRoutine(prev => prev.filter(x => x.id!==r.id))}>×</button>
+            {/* Finance summary */}
+            <button onClick={() => setShowFinance(!showFinance)} style={{ ...s.btn(C.card), width: "100%", border: `1px solid ${C.border}`, marginBottom: 10, fontSize: 12 }}>{showFinance ? "▲ Ocultar finanzas" : "▼ Resumen financiero del mes"}</button>
+            {showFinance && (
+              <div style={s.card}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, textAlign: "center" }}>
+                  <div><div style={{ fontSize: 10, color: C.muted }}>INGRESOS</div><div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 22, color: C.green }}>${monthFinance.income.toLocaleString()}</div></div>
+                  <div><div style={{ fontSize: 10, color: C.muted }}>GASTOS</div><div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 22, color: C.red }}>${monthFinance.expense.toLocaleString()}</div></div>
+                  <div><div style={{ fontSize: 10, color: C.muted }}>NETO</div><div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 22, color: monthFinance.net >= 0 ? C.green : C.red }}>${monthFinance.net.toLocaleString()}</div></div>
                 </div>
-              );})}
-              {routine.length === 0 && <div style={{ color: C.muted, fontSize: 11, textAlign: "center", padding: "12px 0" }}>Sin hábitos registrados.</div>}
-            </div>
-          </div>
-        )}
+              </div>
+            )}
 
-        {moreSection === "contacts" && (
-          <div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-              <span style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 18, letterSpacing: 3, color: M.color }}>CONTACTOS</span>
-              <button style={$.btn(M.color,true)} onClick={() => { setShowMore(false); setModal("contact"); }}>+ NUEVO</button>
+            {/* FAB */}
+            <button onClick={() => setModal("task")} style={{ position: "fixed", bottom: 80, right: 20, width: 52, height: 52, borderRadius: "50%", background: C.grad, border: "none", color: "#fff", fontSize: 26, cursor: "pointer", boxShadow: "0 4px 20px rgba(124,58,237,0.4)", zIndex: 50 }}>+</button>
+          </div>
+        );
+      }
+
+      /* ═══════════════════ CHAT ═══════════════════ */
+      function Chat() {
+        const [input, setInput] = useState("");
+        const [loading, setLoading] = useState(false);
+        const [listening, setListening] = useState(false);
+        const chatEnd = useRef(null);
+        const recognitionRef = useRef(null);
+
+        useEffect(() => { chatEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
+
+        const buildSystem = () => {
+          const modeData = MODES[mode];
+          const ctx = {
+            tareas_vencidas: overdueTasks.map(t => `"${t.title}" (${daysDiff(today, t.dueDate)}d atrás, ${t.company || "sin empresa"})`).join(", ") || "ninguna",
+            tareas_pendientes: pendingTasks.length,
+            eventos_hoy: todayEvents.map(e => `${e.time || "?"} ${e.title}`).join(", ") || "ninguno",
+            pagos_proximos: upcomingPayments.map(p => `${p.name} $${p.amount} (${fmtDate(p.nextDue)})`).join(", ") || "ninguno",
+            proyectos: projects.map(p => p.name).join(", ") || "ninguno",
+            rutina_hoy: `${todayRoutineDone}/${routine.length}`,
+            finanzas_mes: `Ingresos: $${monthFinance.income.toLocaleString()}, Gastos: $${monthFinance.expense.toLocaleString()}, Neto: $${monthFinance.net.toLocaleString()}`,
+          };
+          return `Tu nombre es NEXUS. Asistente ejecutivo personal de ultra-performance para Diana Figueroa Paz, quien maneja 6+ empresas simultáneamente.
+
+PERSONALIDAD ACTIVA: ${modeData.name} — ${modeData.prompt}
+
+CONTEXTO ACTUAL (${today}):
+- Tareas vencidas: ${ctx.tareas_vencidas}
+- Tareas pendientes: ${ctx.tareas_pendientes}
+- Eventos hoy: ${ctx.eventos_hoy}
+- Pagos próximos: ${ctx.pagos_proximos}
+- Proyectos: ${ctx.proyectos}
+- Rutina hoy: ${ctx.rutina_hoy}
+- Finanzas mes: ${ctx.finanzas_mes}
+
+REGLAS:
+1. SIEMPRE en español. Máximo 3-4 oraciones normalmente.
+2. Tienes capacidad de búsqueda web. Úsala para noticias, precios, investigación o cualquier info externa.
+3. Si hay tareas vencidas, mencionarlas según tu personalidad activa.
+4. Para agregar items al sistema, incluye al FINAL de tu respuesta (después del texto) el bloque exacto:
+---ACTIONS---
+{"actions":[{"type":"addTask","title":"...","dueDate":"YYYY-MM-DD","project":"","company":"","priority":"high|medium|low","notes":""},{"type":"addEvent","title":"...","date":"YYYY-MM-DD","time":"HH:MM","evtype":"meeting|call|task|personal|payment","company":"","contact":"","notes":""},{"type":"addPayment","name":"...","amount":0,"nextDue":"YYYY-MM-DD","company":""},{"type":"addProject","name":"...","company":""},{"type":"addContact","name":"...","phone":"","company":"","notes":""},{"type":"addFinance","ftype":"income|expense","amount":0,"description":"","company":"","date":"YYYY-MM-DD"},{"type":"completeTask","id":"ID_EXACTO"},{"type":"completeEvent","id":"ID_EXACTO"},{"type":"addHabit","title":"...","icon":"⭐"}]}
+---END---
+5. Detectar la empresa del contexto cuando agregues items.
+6. Solo usa las acciones que necesites, no incluyas las que no aplican.
+
+IDs de tareas actuales: ${pendingTasks.map(t => `${t.id}:"${t.title}"`).join(", ")}
+IDs de eventos pendientes hoy: ${pendingTodayEvents.map(e => `${e.id}:"${e.title}"`).join(", ")}`;
+        };
+
+        const sendMessage = async (text) => {
+          if (!text.trim()) return;
+          const userMsg = { role: "user", content: text.trim() };
+          const newMsgs = [...messages, userMsg];
+          saveMessages(newMsgs);
+          setInput("");
+          setLoading(true);
+          try {
+            const res = await fetch("https://api.anthropic.com/v1/messages", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                model: "claude-sonnet-4-20250514",
+                max_tokens: 1000,
+                system: buildSystem(),
+                messages: newMsgs.slice(-14).map(m => ({ role: m.role, content: m.content })),
+                tools: [{ type: "web_search_20250305", name: "web_search" }]
+              })
+            });
+            const data = await res.json();
+            let text2 = (data.content || []).map(b => b.type === "text" ? b.text : "").filter(Boolean).join("\n");
+            const cleanText = processActions(text2);
+            const assistantMsg = { role: "assistant", content: cleanText || "..." };
+            const final = [...newMsgs, assistantMsg];
+            saveMessages(final);
+
+            // TTS
+            if (ttsOn && cleanText && "speechSynthesis" in window) {
+              const u = new SpeechSynthesisUtterance(cleanText.replace(/[*_#]/g, ""));
+              u.lang = "es-MX";
+              speechSynthesis.speak(u);
+            }
+          } catch (e) {
+            const errMsg = { role: "assistant", content: "Error de conexión. Intenta de nuevo." };
+            saveMessages([...newMsgs, errMsg]);
+          }
+          setLoading(false);
+        };
+
+        const startSTT = () => {
+          if (!("webkitSpeechRecognition" in window || "SpeechRecognition" in window)) return;
+          const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+          const r = new SR();
+          r.lang = "es-MX";
+          r.continuous = false;
+          r.interimResults = false;
+          r.onresult = (e) => { const t = e.results[0][0].transcript; setInput(t); setListening(false); };
+          r.onerror = () => setListening(false);
+          r.onend = () => setListening(false);
+          recognitionRef.current = r;
+          r.start();
+          setListening(true);
+        };
+
+        const quickBtns = [
+          { label: "📋 Briefing", msg: "Dame el briefing completo del día" },
+          { label: "📅 Agenda", msg: "¿Qué tengo en la agenda de hoy?" },
+          { label: "⚠️ Urgente", msg: "¿Qué es lo más urgente que debo atender?" },
+          { label: "💰 Pagos", msg: "¿Qué pagos tengo próximos?" },
+          { label: "🎯 Foco", msg: "¿En qué debería enfocarme ahora?" },
+          { label: "💪 Motivar", msg: "Necesito motivación" },
+        ];
+
+        return (
+          <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+            {/* Quick buttons */}
+            <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 8, flexShrink: 0 }}>
+              {quickBtns.map(q => (
+                <button key={q.label} onClick={() => sendMessage(q.msg)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 20, padding: "6px 12px", fontSize: 12, color: C.text, cursor: "pointer", whiteSpace: "nowrap" }}>{q.label}</button>
+              ))}
             </div>
-            {contacts.length === 0 ? <div style={{ color: C.muted, textAlign: "center", padding: "20px 0", fontSize: 11 }}>Sin contactos.</div> :
-              contacts.map(c => (
-                <div key={c.id} style={$.row}>
-                  <div style={{ width: 36, height: 36, borderRadius: "50%", background: M.color+"25", border: `1px solid ${M.color}`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Bebas Neue', cursive", fontSize: 16, color: M.color, flexShrink: 0 }}>{c.name[0]?.toUpperCase()}</div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 700 }}>{c.name}</div>
-                    {c.phone && <div style={{ fontSize: 11, color: C.muted }}>{c.phone}</div>}
-                    <div style={{ display: "flex", gap: 5, marginTop: 3, flexWrap: "wrap" }}>
-                      {c.company && <span style={$.bdg(M.color)}>{c.company}</span>}
-                      {c.notes && <span style={{ fontSize: 10, color: C.muted }}>{c.notes}</span>}
-                    </div>
-                  </div>
-                  <button style={$.del} onClick={() => saveContacts(prev => prev.filter(x => x.id!==c.id))}>×</button>
+
+            {/* Messages */}
+            <div style={{ flex: 1, overflowY: "auto", paddingBottom: 8 }}>
+              {messages.length === 0 && (
+                <div style={{ textAlign: "center", padding: "40px 20px", color: C.muted }}>
+                  <div style={{ fontSize: 40, marginBottom: 12 }}>{MODES[mode].emoji}</div>
+                  <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 20, letterSpacing: 3, color: MODES[mode].color }}>{MODES[mode].name.toUpperCase()}</div>
+                  <div style={{ fontSize: 13, marginTop: 8 }}>Modo activo. ¿En qué te ayudo?</div>
+                </div>
+              )}
+              {messages.map((m, i) => (
+                <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start", marginBottom: 8, animation: "fadeIn 0.3s ease" }}>
+                  <div style={{ maxWidth: "85%", padding: "10px 14px", borderRadius: m.role === "user" ? "14px 14px 4px 14px" : "14px 14px 14px 4px", background: m.role === "user" ? C.purple + "33" : C.card, border: `1px solid ${m.role === "user" ? C.purple + "44" : C.border}`, fontSize: 13, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{m.content}</div>
                 </div>
               ))}
+              {loading && (
+                <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: 8 }}>
+                  <div style={{ padding: "10px 14px", borderRadius: "14px 14px 14px 4px", background: C.card, border: `1px solid ${C.border}`, fontSize: 13 }}>
+                    <span style={{ animation: "pulse 1s infinite" }}>▋</span>
+                  </div>
+                </div>
+              )}
+              <div ref={chatEnd} />
+            </div>
+
+            {/* Input bar */}
+            <div style={{ display: "flex", gap: 8, padding: "8px 0", flexShrink: 0, borderTop: `1px solid ${C.border}` }}>
+              <button onClick={() => { setTtsOn(!ttsOn); persist("nx3_tts", !ttsOn); }} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 10px", cursor: "pointer", fontSize: 16 }} title="Text-to-Speech">{ttsOn ? "🔊" : "🔇"}</button>
+              <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), sendMessage(input))} placeholder="Escribe..." style={{ ...s.input, flex: 1, borderRadius: 10 }} />
+              <button onClick={startSTT} style={{ background: listening ? C.red : C.card, border: `1px solid ${listening ? C.red : C.border}`, borderRadius: 10, padding: "8px 10px", cursor: "pointer", fontSize: 16 }} title="Micrófono">🎙️</button>
+              <button onClick={() => sendMessage(input)} style={{ ...s.btn(), borderRadius: 10, padding: "8px 14px" }}>➤</button>
+            </div>
           </div>
-        )}
-        <div style={{ height: 12 }} />
-      </div>
-    </div>
-  );
+        );
+      }
 
-  // ── MODAL ACTIONS ────────────────────────────────────────────────────────
-  const addModalTask    = () => { if (!newTask.title.trim()) return; saveTasks(p => [...p, { id: uid(), ...newTask, status: "pending", createdAt: todayStr() }]); setNewTask({ title: "", dueDate: todayStr(), project: "", company: "", priority: "medium", notes: "" }); setModal(null); };
-  const addModalPay     = () => { if (!newPay.name.trim()) return; savePays(p => [...p, { id: uid(), ...newPay, amount: parseFloat(newPay.amount)||0 }]); setNewPay({ name: "", amount: "", nextDue: todayStr(), company: "Personal" }); setModal(null); };
-  const addModalProj    = () => { if (!newProj.name.trim()) return; saveProjs(p => [...p, { id: uid(), ...newProj, color: COMPANY_COLORS[p.length%COMPANY_COLORS.length], notes: "" }]); setNewProj({ name: "", company: "" }); setModal(null); };
-  const addModalContact = () => { if (!newContact.name.trim()) return; saveContacts(p => [...p, { id: uid(), ...newContact }]); setNewContact({ name: "", phone: "", company: "", notes: "" }); setModal(null); };
-  const addModalFinance = () => { if (!newFinance.amount) return; saveFinance(p => [...p, { id: uid(), type: newFinance.type, amount: parseFloat(newFinance.amount)||0, description: newFinance.description, company: newFinance.company, date: newFinance.date }]); setNewFinance({ type: "income", amount: "", description: "", company: "", date: todayStr() }); setModal(null); };
-  const addModalHabit   = () => { if (!newHabit.title.trim()) return; saveRoutine(p => [...p, { id: uid(), ...newHabit }]); setNewHabit({ title: "", icon: "⭐" }); setModal(null); };
-  const addModalEvent   = () => { if (!newEvent.title.trim()) return; saveEvents(p => [...p, { id: uid(), ...newEvent }]); setNewEvent({ title: "", date: todayStr(), time: "09:00", type: "meeting", company: "", contact: "", notes: "", status: "pending", reminders: [15] }); setModal(null); };
+      /* ═══════════════════ AGENDA ═══════════════════ */
+      function Agenda() {
+        const [view, setView] = useState("week");
+        const [weekOffset, setWeekOffset] = useState(0);
+        const [selectedDay, setSelectedDay] = useState(today);
+        const [agendaFilter, setAgendaFilter] = useState("all");
 
-  const ICONS = ["⭐","💪","🧘","📧","📞","💰","🏃","📚","🎯","✍️","🌅","💤","🥗","💧","🧠","🤝"];
+        const weekDays = useMemo(() => {
+          const d = new Date();
+          d.setDate(d.getDate() - d.getDay() + 1 + weekOffset * 7);
+          return Array.from({ length: 7 }, (_, i) => {
+            const dd = new Date(d);
+            dd.setDate(d.getDate() + i);
+            return dd.toISOString().slice(0, 10);
+          });
+        }, [weekOffset]);
 
-  // ════════════════════════════════════════════════════════════════════════
-  // MAIN RENDER
-  // ════════════════════════════════════════════════════════════════════════
-  return (
-    <div style={$.root}>
-      {showModeSelect && <ModeSelector />}
-      <ReminderOverlay />
-      {showMore && <MoreDrawer />}
+        const filteredEvents = useMemo(() => {
+          let evs = events;
+          if (agendaFilter !== "all") evs = evs.filter(e => e.type === agendaFilter);
+          return evs;
+        }, [events, agendaFilter]);
 
-      {/* HEADER */}
-      <div style={$.hdr}>
-        <div style={$.logo}>NEXUS {M.emoji}</div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          {overdueTasks.length > 0 && <div style={{ background: C.red, color: C.bg, borderRadius: 20, padding: "2px 9px", fontSize: 10, fontWeight: 700 }}>{overdueTasks.length}⚠️</div>}
-          <button style={$.btn(ttsEnabled?M.color:C.muted,true)} onClick={() => { const n=!ttsEnabled; setTtsEnabled(n); persist("nx3_tts",n); }}>{ttsEnabled?"🔊":"🔇"}</button>
-        </div>
-      </div>
+        const dayEvents = useMemo(() => filteredEvents.filter(e => e.date === selectedDay).sort((a, b) => (a.time || "").localeCompare(b.time || "")), [filteredEvents, selectedDay]);
 
-      {/* CONTENT */}
-      {tab === "chat" ? <Chat /> : (
-        <div style={$.scroll}>
-          {tab === "dashboard" && <Dashboard />}
-          {tab === "agenda"    && <Agenda />}
-          {tab === "tasks"     && <Tasks />}
-        </div>
-      )}
+        const listGroups = useMemo(() => {
+          const groups = {};
+          filteredEvents.sort((a, b) => (a.date || "").localeCompare(b.date || "")).forEach(e => {
+            const d = e.date || "Sin fecha";
+            if (!groups[d]) groups[d] = [];
+            groups[d].push(e);
+          });
+          return Object.entries(groups);
+        }, [filteredEvents]);
 
-      {/* BOTTOM NAV */}
-      <nav style={$.nav}>
-        {[
-          { k: "dashboard", icon: "◉", label: "HOY",    badge: overdueTasks.length>0 ? {n:overdueTasks.length,c:C.red} : null },
-          { k: "chat",      icon: "◈", label: "NEXUS",  badge: null },
-          { k: "agenda",    icon: "📅", label: "AGENDA", badge: pendingEvents.filter(e=>e.date<=todayStr()).length>0 ? {n:pendingEvents.filter(e=>e.date<=todayStr()).length,c:M.color} : null },
-          { k: "tasks",     icon: "▣", label: "TAREAS", badge: pendingTasks.length>0 ? {n:pendingTasks.length,c:M.color} : null },
-        ].map(({k,icon,label,badge}) => (
-          <button key={k} style={$.navB(k)} onClick={() => { setTab(k); setShowMore(false); }}>
-            {badge && <span style={$.badge2(badge.c)}>{badge.n}</span>}
-            <span style={{ fontSize: k==="agenda"?15:17 }}>{icon}</span>
-            <span>{label}</span>
-          </button>
-        ))}
-        <button style={{ ...$.navB("more"), color: showMore?M.color:C.muted }} onClick={() => setShowMore(p=>!p)}>
-          <span style={{ fontSize: 17 }}>⊞</span>
-          <span>MÁS</span>
-        </button>
-      </nav>
+        const FILTERS = [
+          { key: "all", label: "Todo" }, { key: "meeting", label: "🤝" }, { key: "call", label: "📞" }, { key: "task", label: "✅" }, { key: "personal", label: "🌟" },
+        ];
 
-      {/* ── MODALS ── */}
+        const dayHasEvents = (d) => events.some(e => e.date === d && e.status !== "done");
+        const dayAllDone = (d) => { const de = events.filter(e => e.date === d); return de.length > 0 && de.every(e => e.status === "done"); };
 
-      {modal === "event" && (
-        <div style={$.overlay} onClick={() => setModal(null)}>
-          <div style={$.modal} onClick={e => e.stopPropagation()}>
-            <div style={$.mHd}>NUEVO EVENTO</div>
-            <div style={$.fg}><label style={$.lbl}>Título del evento</label><input autoFocus style={$.inp} value={newEvent.title} onChange={e => setNewEvent(p=>({...p,title:e.target.value}))} placeholder="Reunión con cliente, llamada con proveedor..." onKeyDown={e => e.key==="Enter" && addModalEvent()} /></div>
-            <div style={$.fg}>
-              <label style={$.lbl}>Tipo</label>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                {Object.entries(EVENT_TYPES).map(([k,et]) => (
-                  <button key={k} style={{ ...$.btn(newEvent.type===k?et.color:C.muted,true), padding: "6px 10px" }} onClick={() => setNewEvent(p=>({...p,type:k}))}>{et.emoji} {et.label}</button>
+        return (
+          <div>
+            {/* View toggle + filters */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+              <button onClick={() => setView("week")} style={{ ...s.btn(view === "week" ? C.purple : C.card), flex: 1, border: `1px solid ${view === "week" ? C.purple : C.border}`, fontSize: 12 }}>Semanal</button>
+              <button onClick={() => setView("list")} style={{ ...s.btn(view === "list" ? C.purple : C.card), flex: 1, border: `1px solid ${view === "list" ? C.purple : C.border}`, fontSize: 12 }}>Lista</button>
+            </div>
+            <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+              {FILTERS.map(f => (
+                <button key={f.key} onClick={() => setAgendaFilter(f.key)} style={{ background: agendaFilter === f.key ? C.purple + "33" : C.card, border: `1px solid ${agendaFilter === f.key ? C.purple : C.border}`, borderRadius: 20, padding: "4px 10px", fontSize: 12, color: agendaFilter === f.key ? C.teal : C.muted, cursor: "pointer" }}>{f.label}</button>
+              ))}
+            </div>
+
+            {view === "week" ? (
+              <div>
+                {/* Week navigation */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                  <button onClick={() => setWeekOffset(weekOffset - 1)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 12px", color: C.text, cursor: "pointer" }}>◀</button>
+                  <span style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>{fmtDate(weekDays[0])} — {fmtDate(weekDays[6])}</span>
+                  <button onClick={() => setWeekOffset(weekOffset + 1)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 12px", color: C.text, cursor: "pointer" }}>▶</button>
+                </div>
+                {/* Day pills */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, marginBottom: 12 }}>
+                  {weekDays.map(d => (
+                    <button key={d} onClick={() => setSelectedDay(d)} style={{ background: d === selectedDay ? C.purple + "33" : d === today ? C.card2 : C.card, border: `1px solid ${d === selectedDay ? C.purple : C.border}`, borderRadius: 10, padding: "8px 2px 6px", cursor: "pointer", textAlign: "center", position: "relative" }}>
+                      <div style={{ fontSize: 9, color: C.muted, fontWeight: 600 }}>{dayName(d)}</div>
+                      <div style={{ fontSize: 16, color: d === today ? C.teal : C.text, fontWeight: d === today ? 700 : 400 }}>{d.slice(8)}</div>
+                      {dayHasEvents(d) && <div style={{ width: 5, height: 5, borderRadius: "50%", background: dayAllDone(d) ? C.green : C.orange, margin: "2px auto 0" }} />}
+                    </button>
+                  ))}
+                </div>
+                {/* Day events */}
+                {dayEvents.length === 0 && <div style={{ textAlign: "center", padding: 20, color: C.muted, fontSize: 13 }}>Sin eventos para este día</div>}
+                {dayEvents.map(ev => (
+                  <div key={ev.id} style={{ ...s.card, borderLeft: `3px solid ${(EVENT_TYPES[ev.type] || {}).color || C.muted}`, display: "flex", gap: 10, alignItems: "flex-start", padding: 12 }}>
+                    <button onClick={() => toggleEvent(ev.id)} style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${ev.status === "done" ? C.green : C.muted}`, background: ev.status === "done" ? C.green : "transparent", cursor: "pointer", flexShrink: 0, fontSize: 11, color: "#fff" }}>{ev.status === "done" ? "✓" : ""}</button>
+                    <div style={{ flex: 1 }} onClick={() => { setEditItem(ev); setModal("event"); }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, textDecoration: ev.status === "done" ? "line-through" : "none" }}>{ev.title}</div>
+                      <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
+                        <span style={s.tag((EVENT_TYPES[ev.type] || {}).color || C.muted)}>{(EVENT_TYPES[ev.type] || {}).emoji} {(EVENT_TYPES[ev.type] || {}).label}</span>
+                        {ev.time && <span style={{ fontSize: 11, color: C.muted }}>🕐 {ev.time}</span>}
+                        {ev.company && <span style={{ fontSize: 11, color: C.muted }}>🏢 {ev.company}</span>}
+                      </div>
+                    </div>
+                    <button onClick={() => deleteEvent(ev.id)} style={{ background: "none", border: "none", color: C.red, fontSize: 14, cursor: "pointer", padding: 4 }}>✕</button>
+                  </div>
                 ))}
               </div>
-            </div>
-            <div style={{ ...$.r2, ...$.fg }}>
-              <div><label style={$.lbl}>Fecha</label><input style={$.inp} type="date" value={newEvent.date} onChange={e => setNewEvent(p=>({...p,date:e.target.value}))} /></div>
-              <div><label style={$.lbl}>Hora</label><input style={$.inp} type="time" value={newEvent.time} onChange={e => setNewEvent(p=>({...p,time:e.target.value}))} /></div>
-            </div>
-            <div style={{ ...$.r2, ...$.fg }}>
-              <div><label style={$.lbl}>Empresa</label><input style={$.inp} value={newEvent.company} onChange={e => setNewEvent(p=>({...p,company:e.target.value}))} placeholder="Empresa..." list="ce1" /><datalist id="ce1">{allCompanies.map(c=><option key={c} value={c}/>)}</datalist></div>
-              <div><label style={$.lbl}>Contacto</label><input style={$.inp} value={newEvent.contact} onChange={e => setNewEvent(p=>({...p,contact:e.target.value}))} placeholder="¿Con quién?" list="cc1" /><datalist id="cc1">{contacts.map(c=><option key={c.id} value={c.name}/>)}</datalist></div>
-            </div>
-            <div style={$.fg}><label style={$.lbl}>Notas</label><input style={$.inp} value={newEvent.notes} onChange={e => setNewEvent(p=>({...p,notes:e.target.value}))} placeholder="Agenda, objetivo, link de la reunión..." /></div>
-            <ReminderPicker value={newEvent.reminders} onChange={v => setNewEvent(p=>({...p,reminders:v}))} label="Recordatorios previos" />
-            <div style={{ display: "flex", gap: 10 }}><button style={{ ...$.btn(C.muted), flex: 1 }} onClick={() => setModal(null)}>CANCELAR</button><button style={{ ...$.btn(EVENT_TYPES[newEvent.type]?.color||M.color), flex: 2 }} onClick={addModalEvent}>AGREGAR EVENTO</button></div>
-          </div>
-        </div>
-      )}
+            ) : (
+              <div>
+                {listGroups.map(([date, evs]) => (
+                  <div key={date} style={{ marginBottom: 12 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: date === today ? C.green : date < today ? C.red : C.muted, letterSpacing: 1, marginBottom: 6, padding: "4px 0" }}>
+                      {date === today ? "HOY" : date < today ? `PASADO — ${fmtDate(date)}` : fmtDate(date)} · {dayName(date)}
+                    </div>
+                    {evs.map(ev => (
+                      <div key={ev.id} style={{ ...s.card, borderLeft: `3px solid ${(EVENT_TYPES[ev.type] || {}).color || C.muted}`, display: "flex", gap: 10, alignItems: "center", padding: 10 }}>
+                        <button onClick={() => toggleEvent(ev.id)} style={{ width: 20, height: 20, borderRadius: 6, border: `2px solid ${ev.status === "done" ? C.green : C.muted}`, background: ev.status === "done" ? C.green : "transparent", cursor: "pointer", flexShrink: 0, fontSize: 10, color: "#fff" }}>{ev.status === "done" ? "✓" : ""}</button>
+                        <span style={{ fontSize: 12, color: C.muted, width: 40, flexShrink: 0 }}>{ev.time || "--:--"}</span>
+                        <span style={{ fontSize: 12, marginRight: 4 }}>{(EVENT_TYPES[ev.type] || {}).emoji}</span>
+                        <span style={{ fontSize: 13, flex: 1, textDecoration: ev.status === "done" ? "line-through" : "none", opacity: ev.status === "done" ? 0.5 : 1 }}>{ev.title}</span>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
 
-      {modal === "task" && (
-        <div style={$.overlay} onClick={() => setModal(null)}>
-          <div style={$.modal} onClick={e => e.stopPropagation()}>
-            <div style={$.mHd}>NUEVA TAREA</div>
-            <div style={$.fg}><label style={$.lbl}>¿Qué hay que hacer?</label><input autoFocus style={$.inp} value={newTask.title} onChange={e => setNewTask(p=>({...p,title:e.target.value}))} placeholder="Describe la tarea..." onKeyDown={e => e.key==="Enter" && addModalTask()} /></div>
-            <div style={$.fg}><label style={$.lbl}>Notas</label><input style={$.inp} value={newTask.notes} onChange={e => setNewTask(p=>({...p,notes:e.target.value}))} placeholder="Contexto adicional..." /></div>
-            <div style={{ ...$.r2, ...$.fg }}>
-              <div><label style={$.lbl}>Fecha</label><input style={$.inp} type="date" value={newTask.dueDate} onChange={e => setNewTask(p=>({...p,dueDate:e.target.value}))} /></div>
-              <div><label style={$.lbl}>Prioridad</label><select style={$.sel} value={newTask.priority} onChange={e => setNewTask(p=>({...p,priority:e.target.value}))}><option value="high">🔴 Alta</option><option value="medium">🟡 Media</option><option value="low">🟢 Baja</option></select></div>
-            </div>
-            <div style={{ ...$.r2, ...$.fg }}>
-              <div><label style={$.lbl}>Empresa</label><input style={$.inp} value={newTask.company} onChange={e => setNewTask(p=>({...p,company:e.target.value}))} placeholder="Empresa..." list="ct1" /><datalist id="ct1">{allCompanies.map(c=><option key={c} value={c}/>)}</datalist></div>
-              <div><label style={$.lbl}>Proyecto</label><input style={$.inp} value={newTask.project} onChange={e => setNewTask(p=>({...p,project:e.target.value}))} placeholder="Proyecto..." list="cp1" /><datalist id="cp1">{projects.map(p=><option key={p.id} value={p.name}/>)}</datalist></div>
-            </div>
-            <div style={{ display: "flex", gap: 10 }}><button style={{ ...$.btn(C.muted), flex: 1 }} onClick={() => setModal(null)}>CANCELAR</button><button style={{ ...$.btn(M.color), flex: 2 }} onClick={addModalTask}>AGREGAR TAREA</button></div>
+            {/* FAB */}
+            <button onClick={() => { setEditItem(null); setModal("event"); }} style={{ position: "fixed", bottom: 80, right: 20, width: 52, height: 52, borderRadius: "50%", background: C.grad, border: "none", color: "#fff", fontSize: 26, cursor: "pointer", boxShadow: "0 4px 20px rgba(124,58,237,0.4)", zIndex: 50 }}>+</button>
           </div>
-        </div>
-      )}
+        );
+      }
 
-      {modal === "payment" && (
-        <div style={$.overlay} onClick={() => setModal(null)}>
-          <div style={$.modal} onClick={e => e.stopPropagation()}>
-            <div style={$.mHd}>NUEVO PAGO RECURRENTE</div>
-            <div style={$.fg}><label style={$.lbl}>Nombre del pago</label><input autoFocus style={$.inp} value={newPay.name} onChange={e => setNewPay(p=>({...p,name:e.target.value}))} placeholder="Renta, Netflix, Servidor..." /></div>
-            <div style={{ ...$.r2, ...$.fg }}>
-              <div><label style={$.lbl}>Monto</label><input style={$.inp} type="number" value={newPay.amount} onChange={e => setNewPay(p=>({...p,amount:e.target.value}))} placeholder="0" /></div>
-              <div><label style={$.lbl}>Próximo vencimiento</label><input style={$.inp} type="date" value={newPay.nextDue} onChange={e => setNewPay(p=>({...p,nextDue:e.target.value}))} /></div>
+      /* ═══════════════════ TASKS ═══════════════════ */
+      function Tasks() {
+        const [filter, setFilter] = useState("pending");
+        const filtered = useMemo(() => {
+          if (filter === "pending") return pendingTasks;
+          if (filter === "done") return doneTasks;
+          return tasks;
+        }, [filter, tasks, pendingTasks, doneTasks]);
+
+        return (
+          <div>
+            <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+              {[{ k: "pending", l: "Pendientes" }, { k: "done", l: "Hechas" }, { k: "all", l: "Todas" }].map(f => (
+                <button key={f.k} onClick={() => setFilter(f.k)} style={{ background: filter === f.k ? C.purple + "33" : C.card, border: `1px solid ${filter === f.k ? C.purple : C.border}`, borderRadius: 20, padding: "5px 14px", fontSize: 12, color: filter === f.k ? C.teal : C.muted, cursor: "pointer", fontWeight: 600 }}>{f.l}</button>
+              ))}
             </div>
-            <div style={$.fg}><label style={$.lbl}>Empresa</label><input style={$.inp} value={newPay.company} onChange={e => setNewPay(p=>({...p,company:e.target.value}))} placeholder="Personal o empresa..." list="cpay1" /><datalist id="cpay1">{["Personal",...allCompanies].map(c=><option key={c} value={c}/>)}</datalist></div>
-            <div style={{ display: "flex", gap: 10 }}><button style={{ ...$.btn(C.muted), flex: 1 }} onClick={() => setModal(null)}>CANCELAR</button><button style={{ ...$.btn(M.color), flex: 2 }} onClick={addModalPay}>AGREGAR PAGO</button></div>
-          </div>
-        </div>
-      )}
 
-      {modal === "project" && (
-        <div style={$.overlay} onClick={() => setModal(null)}>
-          <div style={$.modal} onClick={e => e.stopPropagation()}>
-            <div style={$.mHd}>NUEVO PROYECTO</div>
-            <div style={$.fg}><label style={$.lbl}>Nombre</label><input autoFocus style={$.inp} value={newProj.name} onChange={e => setNewProj(p=>({...p,name:e.target.value}))} placeholder="Nombre del proyecto..." /></div>
-            <div style={$.fg}><label style={$.lbl}>Empresa</label><input style={$.inp} value={newProj.company} onChange={e => setNewProj(p=>({...p,company:e.target.value}))} placeholder="¿A qué empresa pertenece?" list="cproj1" /><datalist id="cproj1">{allCompanies.map(c=><option key={c} value={c}/>)}</datalist></div>
-            <div style={{ display: "flex", gap: 10 }}><button style={{ ...$.btn(C.muted), flex: 1 }} onClick={() => setModal(null)}>CANCELAR</button><button style={{ ...$.btn(M.color), flex: 2 }} onClick={addModalProj}>CREAR PROYECTO</button></div>
-          </div>
-        </div>
-      )}
+            {filtered.length === 0 && <div style={{ textAlign: "center", padding: 30, color: C.muted, fontSize: 13 }}>{filter === "pending" ? "🎉 Sin tareas pendientes" : "Sin resultados"}</div>}
 
-      {modal === "contact" && (
-        <div style={$.overlay} onClick={() => setModal(null)}>
-          <div style={$.modal} onClick={e => e.stopPropagation()}>
-            <div style={$.mHd}>NUEVO CONTACTO</div>
-            <div style={$.fg}><label style={$.lbl}>Nombre</label><input autoFocus style={$.inp} value={newContact.name} onChange={e => setNewContact(p=>({...p,name:e.target.value}))} placeholder="Nombre completo..." /></div>
-            <div style={{ ...$.r2, ...$.fg }}>
-              <div><label style={$.lbl}>Teléfono</label><input style={$.inp} type="tel" value={newContact.phone} onChange={e => setNewContact(p=>({...p,phone:e.target.value}))} placeholder="+1..." /></div>
-              <div><label style={$.lbl}>Empresa</label><input style={$.inp} value={newContact.company} onChange={e => setNewContact(p=>({...p,company:e.target.value}))} placeholder="Empresa..." list="ccon1" /><datalist id="ccon1">{allCompanies.map(c=><option key={c} value={c}/>)}</datalist></div>
+            {filtered.map(t => {
+              const isOverdue = t.status !== "done" && t.dueDate && t.dueDate < today;
+              const days = isOverdue ? daysDiff(today, t.dueDate) : 0;
+              return (
+                <div key={t.id} style={{ ...s.card, borderLeft: `3px solid ${isOverdue ? C.red : t.priority === "high" ? C.red : t.priority === "low" ? C.blue : C.yellow}`, display: "flex", gap: 10, alignItems: "flex-start", padding: 12 }}>
+                  <button onClick={() => toggleTask(t.id)} style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${t.status === "done" ? C.green : C.muted}`, background: t.status === "done" ? C.green : "transparent", cursor: "pointer", flexShrink: 0, fontSize: 11, color: "#fff", marginTop: 1 }}>{t.status === "done" ? "✓" : ""}</button>
+                  <div style={{ flex: 1 }} onClick={() => { setEditItem(t); setModal("task"); }}>
+                    <div style={{ fontSize: 13, fontWeight: 500, textDecoration: t.status === "done" ? "line-through" : "none", opacity: t.status === "done" ? 0.5 : 1 }}>{t.title}</div>
+                    {t.notes && <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{t.notes}</div>}
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 4 }}>
+                      <span style={s.tag(t.priority === "high" ? C.red : t.priority === "low" ? C.blue : C.yellow)}>{t.priority === "high" ? "ALTA" : t.priority === "low" ? "BAJA" : "MEDIA"}</span>
+                      {t.dueDate && <span style={{ fontSize: 11, color: isOverdue ? C.red : C.muted }}>{isOverdue ? `⚠️ ${days}d atrás` : fmtDate(t.dueDate)}</span>}
+                      {t.company && <span style={{ fontSize: 11, color: C.muted }}>🏢 {t.company}</span>}
+                      {t.project && <span style={{ fontSize: 11, color: C.muted }}>📁 {t.project}</span>}
+                    </div>
+                  </div>
+                  <button onClick={() => deleteTask(t.id)} style={{ background: "none", border: "none", color: C.red, fontSize: 14, cursor: "pointer", padding: 4 }}>✕</button>
+                </div>
+              );
+            })}
+
+            <button onClick={() => { setEditItem(null); setModal("task"); }} style={{ position: "fixed", bottom: 80, right: 20, width: 52, height: 52, borderRadius: "50%", background: C.grad, border: "none", color: "#fff", fontSize: 26, cursor: "pointer", boxShadow: "0 4px 20px rgba(124,58,237,0.4)", zIndex: 50 }}>+</button>
+          </div>
+        );
+      }
+
+      /* ═══════════════════ MORE DRAWER ═══════════════════ */
+      function MoreDrawer() {
+        if (!showMore) return null;
+        const tabs = [
+          { key: "projects", label: "Proyectos", emoji: "🗂" },
+          { key: "finance", label: "Finanzas", emoji: "💰" },
+          { key: "routine", label: "Rutina", emoji: "⚡" },
+          { key: "contacts", label: "Contactos", emoji: "👥" },
+        ];
+
+        return (
+          <div style={s.modal}>
+            <div style={s.overlay} onClick={() => setShowMore(false)} />
+            <div style={{ ...s.sheet, maxHeight: "90vh" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                <span style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 22, letterSpacing: 4, background: C.grad, WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>MÁS</span>
+                <button onClick={() => setShowMore(false)} style={{ background: "none", border: "none", color: C.muted, fontSize: 20, cursor: "pointer" }}>✕</button>
+              </div>
+              <div style={{ display: "flex", gap: 4, marginBottom: 14, borderBottom: `1px solid ${C.border}`, paddingBottom: 8 }}>
+                {tabs.map(t => (
+                  <button key={t.key} onClick={() => setMoreTab(t.key)} style={{ flex: 1, background: moreTab === t.key ? C.purple + "22" : "transparent", border: "none", borderBottom: moreTab === t.key ? `2px solid ${C.purple}` : "2px solid transparent", padding: "8px 4px", fontSize: 11, color: moreTab === t.key ? C.teal : C.muted, cursor: "pointer", fontWeight: 600 }}>{t.emoji} {t.label}</button>
+                ))}
+              </div>
+
+              {/* Projects tab */}
+              {moreTab === "projects" && (
+                <div>
+                  {projects.map(proj => {
+                    const pTasks = tasks.filter(t => t.project === proj.name);
+                    const pDone = pTasks.filter(t => t.status === "done").length;
+                    const pct = pTasks.length ? Math.round((pDone / pTasks.length) * 100) : 0;
+                    return (
+                      <div key={proj.id} style={s.card}>
+                        <div style={{ display: "flex", justifyContent: "space-between" }}>
+                          <div><span style={{ fontSize: 13, fontWeight: 600 }}>{proj.name}</span>{proj.company && <span style={{ fontSize: 11, color: C.muted, marginLeft: 8 }}>{proj.company}</span>}</div>
+                          <span style={{ fontSize: 12, color: C.green, fontWeight: 600 }}>{pDone}/{pTasks.length}</span>
+                        </div>
+                        <div style={{ marginTop: 8, height: 4, background: C.card2, borderRadius: 4, overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${pct}%`, background: C.grad, borderRadius: 4 }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <button onClick={() => setModal("project")} style={{ ...s.btn(), width: "100%", marginTop: 8 }}>+ Proyecto</button>
+                </div>
+              )}
+
+              {/* Finance tab */}
+              {moreTab === "finance" && (
+                <div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 12 }}>
+                    <div style={{ ...s.card, textAlign: "center", padding: 10 }}><div style={{ fontSize: 9, color: C.muted }}>INGRESOS</div><div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 20, color: C.green }}>${monthFinance.income.toLocaleString()}</div></div>
+                    <div style={{ ...s.card, textAlign: "center", padding: 10 }}><div style={{ fontSize: 9, color: C.muted }}>GASTOS</div><div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 20, color: C.red }}>${monthFinance.expense.toLocaleString()}</div></div>
+                    <div style={{ ...s.card, textAlign: "center", padding: 10 }}><div style={{ fontSize: 9, color: C.muted }}>NETO</div><div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 20, color: monthFinance.net >= 0 ? C.green : C.red }}>${monthFinance.net.toLocaleString()}</div></div>
+                  </div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, letterSpacing: 1, marginBottom: 6 }}>MOVIMIENTOS</div>
+                  {monthFinance.items.sort((a, b) => (b.date || "").localeCompare(a.date || "")).slice(0, 10).map(f => (
+                    <div key={f.id} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: `1px solid ${C.border}` }}>
+                      <div><div style={{ fontSize: 13 }}>{f.description}</div>{f.company && <div style={{ fontSize: 10, color: C.muted }}>{f.company}</div>}</div>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: f.ftype === "income" ? C.green : C.red }}>{f.ftype === "income" ? "+" : "-"}${(f.amount || 0).toLocaleString()}</span>
+                    </div>
+                  ))}
+                  {payments.length > 0 && (
+                    <div style={{ marginTop: 12 }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: C.orange, letterSpacing: 1, marginBottom: 6 }}>PAGOS RECURRENTES</div>
+                      {payments.map(p => (
+                        <div key={p.id} style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", borderBottom: `1px solid ${C.border}` }}>
+                          <div><div style={{ fontSize: 13 }}>{p.name}</div>{p.company && <div style={{ fontSize: 10, color: C.muted }}>{p.company}</div>}</div>
+                          <div style={{ textAlign: "right" }}><div style={{ fontSize: 13, fontWeight: 600, color: C.orange }}>${(p.amount || 0).toLocaleString()}</div><div style={{ fontSize: 10, color: C.muted }}>{fmtDate(p.nextDue)}</div></div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                    <button onClick={() => setModal("finance")} style={{ ...s.btn(), flex: 1, fontSize: 12 }}>+ Movimiento</button>
+                    <button onClick={() => setModal("payment")} style={{ ...s.btn(C.orange), flex: 1, fontSize: 12 }}>+ Pago</button>
+                  </div>
+                </div>
+              )}
+
+              {/* Routine tab */}
+              {moreTab === "routine" && (
+                <div>
+                  <div style={{ marginBottom: 10, height: 6, background: C.card2, borderRadius: 4, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${routine.length ? (todayRoutineDone / routine.length) * 100 : 0}%`, background: C.grad, borderRadius: 4 }} />
+                  </div>
+                  <div style={{ fontSize: 12, color: C.muted, textAlign: "center", marginBottom: 12 }}>{todayRoutineDone} de {routine.length} completados hoy</div>
+                  {routine.map(h => {
+                    const done = routineLog[today]?.[h.id];
+                    return (
+                      <div key={h.id} style={{ ...s.card, display: "flex", alignItems: "center", gap: 12, padding: 12 }}>
+                        <button onClick={() => toggleRoutineItem(h.id)} style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${done ? C.green : C.muted}`, background: done ? C.green : "transparent", cursor: "pointer", flexShrink: 0, fontSize: 11, color: "#fff" }}>{done ? "✓" : ""}</button>
+                        <span style={{ fontSize: 18 }}>{h.icon}</span>
+                        <span style={{ fontSize: 13, flex: 1, textDecoration: done ? "line-through" : "none", opacity: done ? 0.5 : 1 }}>{h.title}</span>
+                        <button onClick={() => saveRoutine(routine.filter(r => r.id !== h.id))} style={{ background: "none", border: "none", color: C.red, fontSize: 12, cursor: "pointer" }}>✕</button>
+                      </div>
+                    );
+                  })}
+                  <button onClick={() => setModal("habit")} style={{ ...s.btn(), width: "100%", marginTop: 8 }}>+ Hábito</button>
+                </div>
+              )}
+
+              {/* Contacts tab */}
+              {moreTab === "contacts" && (
+                <div>
+                  {contacts.map(c => (
+                    <div key={c.id} style={{ ...s.card, padding: 12 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 600 }}>{c.name}</div>
+                          {c.company && <div style={{ fontSize: 11, color: C.muted }}>🏢 {c.company}</div>}
+                          {c.phone && <div style={{ fontSize: 12, color: C.teal, marginTop: 2 }}>📱 {c.phone}</div>}
+                          {c.notes && <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{c.notes}</div>}
+                        </div>
+                        <button onClick={() => saveContacts(contacts.filter(x => x.id !== c.id))} style={{ background: "none", border: "none", color: C.red, fontSize: 12, cursor: "pointer" }}>✕</button>
+                      </div>
+                    </div>
+                  ))}
+                  <button onClick={() => setModal("contact")} style={{ ...s.btn(), width: "100%", marginTop: 8 }}>+ Contacto</button>
+                </div>
+              )}
             </div>
-            <div style={$.fg}><label style={$.lbl}>Notas</label><input style={$.inp} value={newContact.notes} onChange={e => setNewContact(p=>({...p,notes:e.target.value}))} placeholder="Contexto del contacto..." /></div>
-            <div style={{ display: "flex", gap: 10 }}><button style={{ ...$.btn(C.muted), flex: 1 }} onClick={() => setModal(null)}>CANCELAR</button><button style={{ ...$.btn(M.color), flex: 2 }} onClick={addModalContact}>AGREGAR</button></div>
           </div>
-        </div>
-      )}
+        );
+      }
 
-      {modal === "finance" && (
-        <div style={$.overlay} onClick={() => setModal(null)}>
-          <div style={$.modal} onClick={e => e.stopPropagation()}>
-            <div style={$.mHd}>REGISTRAR MOVIMIENTO</div>
-            <div style={$.fg}>
-              <label style={$.lbl}>Tipo</label>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button style={{ ...$.btn(newFinance.type==="income"?C.green:C.muted), flex: 1 }} onClick={() => setNewFinance(p=>({...p,type:"income"}))}>💚 INGRESO</button>
-                <button style={{ ...$.btn(newFinance.type==="expense"?C.red:C.muted), flex: 1 }} onClick={() => setNewFinance(p=>({...p,type:"expense"}))}>🔴 GASTO</button>
+      /* ═══════════════════ MODALS ═══════════════════ */
+      function ModalForm() {
+        if (!modal) return null;
+        const [form, setForm] = useState(() => {
+          if (editItem) return { ...editItem };
+          switch (modal) {
+            case "task": return { title: "", dueDate: today, priority: "medium", company: "", project: "", notes: "" };
+            case "event": return { title: "", date: today, time: "", type: "meeting", company: "", contact: "", notes: "", reminders: [15] };
+            case "payment": return { name: "", amount: "", nextDue: today, company: "" };
+            case "project": return { name: "", company: "" };
+            case "contact": return { name: "", phone: "", company: "", notes: "" };
+            case "finance": return { ftype: "expense", amount: "", description: "", company: "", date: today };
+            case "habit": return { title: "", icon: "⭐" };
+            default: return {};
+          }
+        });
+
+        const up = (k, v) => setForm(p => ({ ...p, [k]: v }));
+
+        const submit = () => {
+          switch (modal) {
+            case "task":
+              if (!form.title.trim()) return;
+              if (editItem) saveTasks(tasks.map(t => t.id === editItem.id ? { ...t, ...form } : t));
+              else saveTasks([...tasks, { id: uid(), ...form, status: "pending" }]);
+              break;
+            case "event":
+              if (!form.title.trim()) return;
+              if (editItem) saveEvents(events.map(e => e.id === editItem.id ? { ...e, ...form } : e));
+              else saveEvents([...events, { id: uid(), ...form, status: "pending" }]);
+              break;
+            case "payment":
+              if (!form.name.trim()) return;
+              if (editItem) savePayments(payments.map(p => p.id === editItem.id ? { ...p, ...form, amount: parseFloat(form.amount) || 0 } : p));
+              else savePayments([...payments, { id: uid(), ...form, amount: parseFloat(form.amount) || 0 }]);
+              break;
+            case "project":
+              if (!form.name.trim()) return;
+              saveProjects([...projects, { id: uid(), ...form }]);
+              break;
+            case "contact":
+              if (!form.name.trim()) return;
+              saveContacts([...contacts, { id: uid(), ...form }]);
+              break;
+            case "finance":
+              if (!form.description.trim()) return;
+              saveFinance([...finance, { id: uid(), ...form, amount: parseFloat(form.amount) || 0 }]);
+              break;
+            case "habit":
+              if (!form.title.trim()) return;
+              saveRoutine([...routine, { id: uid(), ...form }]);
+              break;
+          }
+          setModal(null);
+          setEditItem(null);
+        };
+
+        const F = (label, key, type = "text", extra) => (
+          <div style={{ marginBottom: 10 }}>
+            <label style={{ fontSize: 11, color: C.muted, fontWeight: 600, display: "block", marginBottom: 4, letterSpacing: 0.5 }}>{label}</label>
+            {extra || <input type={type} value={form[key] || ""} onChange={e => up(key, e.target.value)} style={s.input} list={key === "company" ? "company-list" : undefined} />}
+          </div>
+        );
+
+        const toggleReminder = (val) => {
+          const cur = form.reminders || [];
+          up("reminders", cur.includes(val) ? cur.filter(v => v !== val) : [...cur, val]);
+        };
+
+        return (
+          <div style={s.modal}>
+            <div style={s.overlay} onClick={() => { setModal(null); setEditItem(null); }} />
+            <div style={s.sheet}>
+              <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 20, letterSpacing: 3, marginBottom: 14, color: C.teal }}>
+                {editItem ? "EDITAR" : "NUEVO"} {modal === "task" ? "TAREA" : modal === "event" ? "EVENTO" : modal === "payment" ? "PAGO" : modal === "project" ? "PROYECTO" : modal === "contact" ? "CONTACTO" : modal === "finance" ? "MOVIMIENTO" : "HÁBITO"}
+              </div>
+
+              {modal === "task" && (<>
+                {F("Título", "title")}
+                {F("Fecha límite", "dueDate", "date")}
+                {F("Prioridad", "priority", "text",
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {["high", "medium", "low"].map(p => (
+                      <button key={p} onClick={() => up("priority", p)} style={{ flex: 1, padding: "8px", borderRadius: 8, border: `1px solid ${form.priority === p ? (p === "high" ? C.red : p === "low" ? C.blue : C.yellow) : C.border}`, background: form.priority === p ? (p === "high" ? C.red : p === "low" ? C.blue : C.yellow) + "22" : C.card, color: form.priority === p ? C.text : C.muted, fontSize: 12, cursor: "pointer", fontWeight: 600 }}>{p === "high" ? "Alta" : p === "low" ? "Baja" : "Media"}</button>
+                    ))}
+                  </div>
+                )}
+                {F("Empresa", "company")}
+                {F("Proyecto", "project", "text", <select value={form.project || ""} onChange={e => up("project", e.target.value)} style={{ ...s.input, appearance: "auto" }}><option value="">Sin proyecto</option>{projects.map(p => <option key={p.id} value={p.name}>{p.name}</option>)}</select>)}
+                {F("Notas", "notes", "text", <textarea value={form.notes || ""} onChange={e => up("notes", e.target.value)} style={{ ...s.input, minHeight: 60, resize: "vertical" }} />)}
+              </>)}
+
+              {modal === "event" && (<>
+                {F("Título", "title")}
+                {F("Fecha", "date", "date")}
+                {F("Hora", "time", "time")}
+                {F("Tipo", "type", "text",
+                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                    {Object.entries(EVENT_TYPES).map(([k, v]) => (
+                      <button key={k} onClick={() => up("type", k)} style={{ padding: "6px 10px", borderRadius: 8, border: `1px solid ${form.type === k ? v.color : C.border}`, background: form.type === k ? v.color + "22" : C.card, color: form.type === k ? v.color : C.muted, fontSize: 11, cursor: "pointer" }}>{v.emoji} {v.label}</button>
+                    ))}
+                  </div>
+                )}
+                {F("Empresa", "company")}
+                {F("Contacto", "contact")}
+                {F("Notas", "notes", "text", <textarea value={form.notes || ""} onChange={e => up("notes", e.target.value)} style={{ ...s.input, minHeight: 60, resize: "vertical" }} />)}
+                {F("Recordatorios", "reminders", "text",
+                  <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                    {REMINDER_OPTIONS.map(r => (
+                      <button key={r.value} onClick={() => toggleReminder(r.value)} style={{ padding: "5px 10px", borderRadius: 8, border: `1px solid ${(form.reminders || []).includes(r.value) ? C.teal : C.border}`, background: (form.reminders || []).includes(r.value) ? C.teal + "22" : C.card, color: (form.reminders || []).includes(r.value) ? C.teal : C.muted, fontSize: 11, cursor: "pointer" }}>{r.label}</button>
+                    ))}
+                  </div>
+                )}
+              </>)}
+
+              {modal === "payment" && (<>
+                {F("Nombre", "name")}
+                {F("Monto", "amount", "number")}
+                {F("Próximo pago", "nextDue", "date")}
+                {F("Empresa", "company")}
+              </>)}
+
+              {modal === "project" && (<>
+                {F("Nombre", "name")}
+                {F("Empresa", "company")}
+              </>)}
+
+              {modal === "contact" && (<>
+                {F("Nombre", "name")}
+                {F("Teléfono", "phone", "tel")}
+                {F("Empresa", "company")}
+                {F("Notas", "notes", "text", <textarea value={form.notes || ""} onChange={e => up("notes", e.target.value)} style={{ ...s.input, minHeight: 60, resize: "vertical" }} />)}
+              </>)}
+
+              {modal === "finance" && (<>
+                {F("Tipo", "ftype", "text",
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={() => up("ftype", "income")} style={{ flex: 1, padding: 10, borderRadius: 8, border: `1px solid ${form.ftype === "income" ? C.green : C.border}`, background: form.ftype === "income" ? C.green + "22" : C.card, color: form.ftype === "income" ? C.green : C.muted, fontSize: 13, cursor: "pointer", fontWeight: 600 }}>💵 Ingreso</button>
+                    <button onClick={() => up("ftype", "expense")} style={{ flex: 1, padding: 10, borderRadius: 8, border: `1px solid ${form.ftype === "expense" ? C.red : C.border}`, background: form.ftype === "expense" ? C.red + "22" : C.card, color: form.ftype === "expense" ? C.red : C.muted, fontSize: 13, cursor: "pointer", fontWeight: 600 }}>💸 Gasto</button>
+                  </div>
+                )}
+                {F("Monto", "amount", "number")}
+                {F("Descripción", "description")}
+                {F("Empresa", "company")}
+                {F("Fecha", "date", "date")}
+              </>)}
+
+              {modal === "habit" && (<>
+                {F("Nombre del hábito", "title")}
+                {F("Icono", "icon", "text",
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {["⭐", "💧", "🏃", "📖", "🧘", "💊", "🥗", "😴", "✍️", "🎯"].map(icon => (
+                      <button key={icon} onClick={() => up("icon", icon)} style={{ width: 36, height: 36, borderRadius: 8, border: `1px solid ${form.icon === icon ? C.teal : C.border}`, background: form.icon === icon ? C.teal + "22" : C.card, fontSize: 18, cursor: "pointer" }}>{icon}</button>
+                    ))}
+                  </div>
+                )}
+              </>)}
+
+              <datalist id="company-list">
+                {companies.map(c => <option key={c} value={c} />)}
+              </datalist>
+
+              <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+                <button onClick={() => { setModal(null); setEditItem(null); }} style={{ ...s.btn(C.card), flex: 1, border: `1px solid ${C.border}` }}>Cancelar</button>
+                <button onClick={submit} style={{ ...s.btn(), flex: 2 }}>Guardar</button>
               </div>
             </div>
-            <div style={$.fg}><label style={$.lbl}>Descripción</label><input autoFocus style={$.inp} value={newFinance.description} onChange={e => setNewFinance(p=>({...p,description:e.target.value}))} placeholder="¿De qué es?" /></div>
-            <div style={{ ...$.r2, ...$.fg }}>
-              <div><label style={$.lbl}>Monto</label><input style={$.inp} type="number" value={newFinance.amount} onChange={e => setNewFinance(p=>({...p,amount:e.target.value}))} placeholder="0" /></div>
-              <div><label style={$.lbl}>Fecha</label><input style={$.inp} type="date" value={newFinance.date} onChange={e => setNewFinance(p=>({...p,date:e.target.value}))} /></div>
-            </div>
-            <div style={$.fg}><label style={$.lbl}>Empresa</label><input style={$.inp} value={newFinance.company} onChange={e => setNewFinance(p=>({...p,company:e.target.value}))} placeholder="¿A qué empresa?" list="cfin1" /><datalist id="cfin1">{["Personal",...allCompanies].map(c=><option key={c} value={c}/>)}</datalist></div>
-            <div style={{ display: "flex", gap: 10 }}><button style={{ ...$.btn(C.muted), flex: 1 }} onClick={() => setModal(null)}>CANCELAR</button><button style={{ ...$.btn(newFinance.type==="income"?C.green:C.red), flex: 2 }} onClick={addModalFinance}>REGISTRAR</button></div>
           </div>
-        </div>
-      )}
+        );
+      }
 
-      {modal === "habit" && (
-        <div style={$.overlay} onClick={() => setModal(null)}>
-          <div style={$.modal} onClick={e => e.stopPropagation()}>
-            <div style={$.mHd}>NUEVO HÁBITO / RUTINA</div>
-            <div style={$.fg}><label style={$.lbl}>¿Qué hábito?</label><input autoFocus style={$.inp} value={newHabit.title} onChange={e => setNewHabit(p=>({...p,title:e.target.value}))} placeholder="Ejercicio, Revisar emails, Meditación..." /></div>
-            <div style={$.fg}>
-              <label style={$.lbl}>Hora del hábito (opcional)</label>
-              <input style={$.inp} type="time" value={newHabit.time||""} onChange={e => setNewHabit(p=>({...p,time:e.target.value}))} />
-            </div>
-            {newHabit.time && <ReminderPicker value={newHabit.reminders} onChange={v => setNewHabit(p=>({...p,reminders:v}))} label="Avisarme antes" />}
-            <div style={$.fg}>
-              <label style={$.lbl}>Ícono</label>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {ICONS.map(icon => <button key={icon} style={{ fontSize: 20, background: newHabit.icon===icon?M.color+"30":"transparent", border: `1px solid ${newHabit.icon===icon?M.color:C.border}`, borderRadius: 8, padding: "6px 8px", cursor: "pointer" }} onClick={() => setNewHabit(p=>({...p,icon}))}>{icon}</button>)}
+      /* ═══════════════════ REMINDER OVERLAY ═══════════════════ */
+      function ReminderOverlay() {
+        if (!reminder) return null;
+        return (
+          <div style={{ position: "fixed", inset: 0, zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+            <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.85)", backdropFilter: "blur(8px)" }} />
+            <div style={{ position: "relative", background: C.card, border: `1px solid ${C.border}`, borderRadius: 20, padding: 24, maxWidth: 360, width: "100%", textAlign: "center", animation: "fadeIn 0.3s ease" }}>
+              <div style={{ fontSize: 48, marginBottom: 12 }}>{reminder.reminderType === "overdue" ? "⚠️" : "🔔"}</div>
+              <div style={{ fontFamily: "'Bebas Neue', cursive", fontSize: 22, letterSpacing: 3, color: reminder.reminderType === "overdue" ? C.red : C.teal, marginBottom: 8 }}>
+                {reminder.reminderType === "overdue" ? "TAREAS VENCIDAS" : reminder.minBefore > 0 ? `EN ${reminder.minBefore} MIN` : "AHORA"}
+              </div>
+              <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>{reminder.title}</div>
+              {reminder.time && <div style={{ fontSize: 14, color: C.muted, marginBottom: 8 }}>🕐 {reminder.time}</div>}
+              {reminder.company && <div style={{ fontSize: 12, color: C.muted }}>🏢 {reminder.company}</div>}
+              <div style={{ display: "flex", gap: 8, marginTop: 20, flexDirection: "column" }}>
+                {!reminder.reminderType !== "overdue" && reminder.id && (
+                  <button onClick={() => { toggleEvent(reminder.id); setReminder(null); }} style={{ ...s.btn(C.green), width: "100%" }}>✅ YA LO HICE</button>
+                )}
+                <button onClick={() => snoozeReminder(reminder.id || "tasks", 30)} style={{ ...s.btn(C.yellow), width: "100%" }}>⏰ Recordar en 30 min</button>
+                <button onClick={() => snoozeReminder(reminder.id || "tasks", 120)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 8, padding: "10px 18px", color: C.muted, fontSize: 13, cursor: "pointer" }}>Ignorar 2 horas</button>
               </div>
             </div>
-            <div style={{ display: "flex", gap: 10 }}><button style={{ ...$.btn(C.muted), flex: 1 }} onClick={() => setModal(null)}>CANCELAR</button><button style={{ ...$.btn(M.color), flex: 2 }} onClick={addModalHabit}>AGREGAR HÁBITO</button></div>
           </div>
-        </div>
-      )}
-    </div>
-  );
-}
+        );
+      }
 
-    const container = document.getElementById('root');
-    const root = ReactDOM.createRoot(container);
-    root.render(React.createElement(NEXUS));
+      /* ═══════════════════ RENDER ═══════════════════ */
+      return (
+        <div style={s.root}>
+          {showModeSelect && <ModeSelect />}
+          <ReminderOverlay />
+          <ModalForm />
+          <MoreDrawer />
+
+          {/* Header */}
+          <div style={s.header}>
+            <div style={s.logo}>NEXUS</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <button onClick={() => setShowModeSelect(true)} style={{ background: MODES[mode].color + "22", border: `1px solid ${MODES[mode].color}44`, borderRadius: 20, padding: "4px 10px", fontSize: 12, color: MODES[mode].color, cursor: "pointer" }}>{MODES[mode].emoji} {MODES[mode].name}</button>
+            </div>
+          </div>
+
+          {/* Main content */}
+          <div style={s.main}>
+            {tab === "dashboard" && <Dashboard />}
+            {tab === "chat" && <Chat />}
+            {tab === "agenda" && <Agenda />}
+            {tab === "tasks" && <Tasks />}
+          </div>
+
+          {/* Bottom nav */}
+          <nav style={s.nav}>
+            {[
+              { key: "dashboard", label: "HOY", icon: "◉", badge: overdueTasks.length || null, badgeColor: C.red },
+              { key: "chat", label: "NEXUS", icon: "◈" },
+              { key: "agenda", label: "AGENDA", icon: "📅", badge: pendingTodayEvents.length || null, badgeColor: C.orange },
+              { key: "tasks", label: "TAREAS", icon: "▣", badge: pendingTasks.length || null, badgeColor: C.yellow },
+              { key: "more", label: "MÁS", icon: "⊞" },
+            ].map(n => (
+              <button key={n.key} onClick={() => n.key === "more" ? setShowMore(true) : setTab(n.key)} style={s.navBtn(tab === n.key || (n.key === "more" && showMore))}>
+                {n.badge && <span style={s.badge(n.badgeColor)}>{n.badge}</span>}
+                <span style={{ fontSize: 18 }}>{n.icon}</span>
+                <span style={{ fontFamily: "'Bebas Neue', cursive", letterSpacing: 2 }}>{n.label}</span>
+              </button>
+            ))}
+          </nav>
+        </div>
+      );
+    }
+
+    // Expose NEXUS globally for the render script
+    window.NEXUS = NEXUS;
+  </script>
+
+  <!-- RENDER: This script MUST be outside the type="text/babel" block -->
+  <script>
+    // Wait for Babel to transpile and execute
+    function waitForNexus() {
+      if (window.NEXUS) {
+        var container = document.getElementById('root');
+        var root = ReactDOM.createRoot(container);
+        root.render(React.createElement(window.NEXUS));
+      } else {
+        setTimeout(waitForNexus, 50);
+      }
+    }
+    waitForNexus();
   </script>
 </body>
 </html>
