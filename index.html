@@ -504,6 +504,26 @@ ${buildContext()}`;
   const weekDays      = getWeekDays(weekOffset);
   const selectedDayEvents = events.filter(e => e.date === selectedDay).sort((a,b) => (a.time||"99").localeCompare(b.time||"99"));
   const pendingEvents = events.filter(e => e.status !== "done");
+  const unifiedItems = (() => {
+    if (unifiedFilter === "projects") return [];
+    const items = [];
+    if (unifiedFilter === "all" || unifiedFilter === "task") {
+      pendingTasks.forEach(t => items.push({ ...t, _kind: "task" }));
+    }
+    const evFilter = unifiedFilter === "all" ? null : unifiedFilter;
+    if (unifiedFilter !== "task") {
+      events.filter(e => e.status !== "done" && (!evFilter || e.type === evFilter))
+        .forEach(e => items.push({ ...e, _kind: "event" }));
+    }
+    return items.sort((a, b) => {
+      const aDate = a.dueDate || a.date || "9999";
+      const bDate = b.dueDate || b.date || "9999";
+      if (aDate < todayStr() && bDate >= todayStr()) return -1;
+      if (bDate < todayStr() && aDate >= todayStr()) return 1;
+      if (aDate !== bDate) return aDate.localeCompare(bDate);
+      return (a.time || "23:59").localeCompare(b.time || "23:59");
+    });
+  })();
 
   // ── STYLES ──────────────────────────────────────────────────────────────
   const $ = {
@@ -616,27 +636,6 @@ ${buildContext()}`;
     const doneTodayCount = todayEvents.filter(e => e.status === "done").length;
     const totalTodayCount = todayEvents.length;
 
-    // Build unified items list
-    const unifiedItems = (() => {
-      if (unifiedFilter === "projects") return [];
-      const items = [];
-      if (unifiedFilter === "all" || unifiedFilter === "task") {
-        pendingTasks.forEach(t => items.push({ ...t, _kind: "task" }));
-      }
-      const evFilter = unifiedFilter === "all" ? null : unifiedFilter;
-      if (unifiedFilter !== "task") {
-        events.filter(e => e.status !== "done" && (!evFilter || e.type === evFilter))
-          .forEach(e => items.push({ ...e, _kind: "event" }));
-      }
-      return items.sort((a, b) => {
-        const aDate = a.dueDate || a.date || "9999";
-        const bDate = b.dueDate || b.date || "9999";
-        if (aDate < todayStr() && bDate >= todayStr()) return -1;
-        if (bDate < todayStr() && aDate >= todayStr()) return 1;
-        if (aDate !== bDate) return aDate.localeCompare(bDate);
-        return (a.time || "23:59").localeCompare(b.time || "23:59");
-      });
-    })();
     return (
       <div>
         {/* Header */}
@@ -1150,8 +1149,6 @@ ${buildContext()}`;
         </div>
       )}
     </div>
-  );
-
   );
   };
 
