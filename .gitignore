@@ -1,0 +1,4 @@
+# Salidas de Playwright MCP (snapshots, capturas, logs de consola, traces)
+.playwright-mcp/
+
+node_modules/
