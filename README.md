@@ -11,6 +11,14 @@ python3 -m http.server 8321
 
 ## Playwright MCP
 
-El repo trae configurado el servidor MCP de Playwright en [`.mcp.json`](.mcp.json), que
-permite a Claude Code abrir la app en un navegador real, inspeccionarla y probarla.
-Detalles, flags y ejemplos en [`docs/playwright-mcp.md`](docs/playwright-mcp.md).
+El repo trae configurado el servidor MCP de Playwright en [`.mcp.json`](.mcp.json),
+que permite a Claude Code abrir la app en un navegador real, inspeccionarla y probarla.
+
+Elige el navegador solo según dónde ejecutes Claude Code:
+
+- **En tu máquina** → se engancha a **tu Chrome abierto**, con tus sesiones y páginas
+  guardadas. Solo necesitas instalar la
+  [extensión Playwright](https://chromewebstore.google.com/detail/playwright-extension/mmlmfjhmonkocbjadbfplnigmagldckm).
+- **En Claude Code web / contenedor remoto** → Chromium headless preinstalado.
+
+Detalles, modos y flags en [`docs/playwright-mcp.md`](docs/playwright-mcp.md).

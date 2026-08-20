@@ -31,45 +31,65 @@ Capacidades extra opcionales con `--caps`: `vision` (clic por coordenadas),
 
 ## Configuración en este repo
 
-Está en [`.mcp.json`](../.mcp.json), a nivel de proyecto, así que Claude Code lo detecta
-automáticamente al abrir el repo (pide aprobación la primera vez):
+[`.mcp.json`](../.mcp.json) apunta a un script que elige el modo según dónde estés:
 
 ```json
 {
   "mcpServers": {
-    "playwright": {
-      "command": "npx",
-      "args": [
-        "-y", "@playwright/mcp@latest",
-        "--headless",
-        "--isolated",
-        "--executable-path", "${PLAYWRIGHT_CHROMIUM_PATH:-/opt/pw-browsers/chromium}"
-      ]
-    }
+    "playwright": { "command": "bash", "args": ["scripts/playwright-mcp.sh"] }
   }
 }
 ```
 
-Por qué cada flag:
+| Modo | Qué navegador usa | Cuándo se elige |
+|---|---|---|
+| `extension` | **Tu Chrome ya abierto**: tu perfil real, tus sesiones iniciadas, tus pestañas | Por defecto en tu máquina |
+| `container` | Chromium headless preinstalado, perfil aislado en memoria | Por defecto en el contenedor remoto de Claude Code |
+| `chrome` | Tu Chrome, pero con un perfil aparte que persiste entre sesiones | Solo si lo fuerzas |
 
-- `--headless`: por defecto abre navegador con ventana; en un contenedor sin display hay que forzar headless.
-- `--isolated`: perfil en memoria, sin persistir cookies/sesión en disco entre ejecuciones.
-- `--executable-path`: sin esto, el server busca el canal `chrome` en `/opt/google/chrome/chrome` y falla.
-  `PLAYWRIGHT_CHROMIUM_PATH` permite sobreescribir la ruta; el valor por defecto es el Chromium
-  ya preinstalado en el entorno remoto de Claude Code.
-
-En una máquina local, exporta la ruta a tu navegador antes de abrir Claude Code, por ejemplo:
-
-```bash
-# macOS con Chrome instalado
-export PLAYWRIGHT_CHROMIUM_PATH="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-```
-
-Alta manual equivalente (si prefieres no usar el archivo del repo):
+La detección es simple: si existe `/opt/pw-browsers/chromium` estamos en el contenedor
+remoto → `container`; si no, `extension`. Para forzar uno:
 
 ```bash
-claude mcp add playwright npx @playwright/mcp@latest
+export PLAYWRIGHT_MCP_MODE=chrome   # extension | container | chrome
 ```
+
+### Usar tu Chrome de siempre (modo `extension`)
+
+Es el modo que conserva todo lo que ya tienes guardado: cookies, sesiones abiertas,
+extensiones y pestañas. Requiere Claude Code corriendo **en tu máquina** (CLI, app de
+escritorio o extensión de IDE); desde Claude Code en la web no hay forma de alcanzar
+tu navegador local.
+
+1. Instala la extensión **Playwright Extension** desde la
+   [Chrome Web Store](https://chromewebstore.google.com/detail/playwright-extension/mmlmfjhmonkocbjadbfplnigmagldckm).
+2. Abre este repo con Claude Code. No hace falta configurar nada más: el script ya
+   elige `extension` fuera del contenedor.
+3. La primera vez que el agente toque el navegador, se abre una página para que
+   **elijas qué pestaña compartir**. Tú decides a qué accede.
+
+Para saltarte esa aprobación manual en cada sesión, copia el token de la página de
+estado de la extensión y expórtalo antes de abrir Claude Code:
+
+```bash
+export PLAYWRIGHT_MCP_EXTENSION_TOKEN="tu-token"
+```
+
+Si falta la extensión, el error lo dice explícitamente y enlaza a la tienda.
+
+### Alternativa sin extensión (modo `chrome`)
+
+`PLAYWRIGHT_MCP_MODE=chrome` lanza tu Chrome real pero con un perfil propio de
+Playwright, guardado en `~/Library/Caches/ms-playwright/mcp-{canal}-{hash}` (macOS),
+`~/.cache/ms-playwright/...` (Linux) o `%USERPROFILE%\AppData\Local\ms-playwright\...`
+(Windows). No hereda tus sesiones actuales, pero como el perfil persiste, inicias
+sesión una vez y se queda. Ojo: un perfil persistente solo admite una instancia a la
+vez, así que dos clientes MCP sobre el mismo repo chocan.
+
+**No recomendado**: apuntar `--user-data-dir` a tu carpeta de perfil real de Chrome.
+Chrome bloquea el perfil mientras está abierto (tendrías que cerrarlo del todo) y
+desde Chrome 136 la depuración remota sobre el perfil por defecto está restringida.
+El modo `extension` existe precisamente para cubrir ese caso sin esos problemas.
 
 ## Cómo usarlo con este proyecto
 
