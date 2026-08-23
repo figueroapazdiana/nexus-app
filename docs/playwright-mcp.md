@@ -54,6 +54,23 @@ remoto → `container`; si no, `extension`. Para forzar uno:
 export PLAYWRIGHT_MCP_MODE=chrome   # extension | container | chrome
 ```
 
+### Instalación en tu equipo (un comando)
+
+```bash
+git clone -b claude/playwright-mcp-install-usa83y https://github.com/figueroapazdiana/nexus-app.git
+cd nexus-app
+bash scripts/install-local.sh
+```
+
+(si ya tienes el repo: `git pull` y ejecuta solo la última línea)
+
+El script comprueba Node, descarga `@playwright/mcp@latest`, detecta Chrome, mira si
+te falta la extensión —y te abre la página de la tienda si es así—, y termina
+arrancando el servidor de verdad para confirmar que responde. Devuelve código de
+salida distinto de cero si algo falló.
+
+En Windows ejecútalo desde Git Bash o WSL.
+
 ### Usar tu Chrome de siempre (modo `extension`)
 
 Es el modo que conserva todo lo que ya tienes guardado: cookies, sesiones abiertas,

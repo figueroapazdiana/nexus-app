@@ -21,4 +21,10 @@ Elige el navegador solo según dónde ejecutes Claude Code:
   [extensión Playwright](https://chromewebstore.google.com/detail/playwright-extension/mmlmfjhmonkocbjadbfplnigmagldckm).
 - **En Claude Code web / contenedor remoto** → Chromium headless preinstalado.
 
+Para dejarlo listo en tu equipo:
+
+```bash
+bash scripts/install-local.sh
+```
+
 Detalles, modos y flags en [`docs/playwright-mcp.md`](docs/playwright-mcp.md).
